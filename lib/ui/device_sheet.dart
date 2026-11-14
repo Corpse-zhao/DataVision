@@ -1,3 +1,4 @@
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../ble/link.dart';
@@ -28,7 +29,10 @@ class _DeviceSheet extends StatelessWidget {
         animation: link,
         builder: (context, _) {
           final pool = isBms ? bmsDrivers() : controllerDrivers();
-          final list = link.results;
+          final all = link.results;
+          // 选控制器时把保护板排掉：蚂蚁 / 极空的广播名（ANT-xxx、JK-xxx）在车上
+          // 跟控制器一起广播，混在列表里很容易点错，点错就连错通道、永远出不来数
+          final list = isBms ? all : all.where((r) => !looksLikeBmsName(advName(r))).toList();
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -77,10 +81,17 @@ class _DeviceSheet extends StatelessWidget {
               const SizedBox(height: 8),
               Flexible(
                 child: list.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
                         child: Center(
-                          child: Text('还没搜到设备，确认设备已上电', style: TextStyle(color: AppColors.inkSoft)),
+                          child: Text(
+                            // 有设备但全被过滤掉了，说明搜到的都是保护板
+                            all.isNotEmpty && !isBms
+                                ? '只搜到了保护板，控制器还没上电或不在范围内'
+                                : '还没搜到设备，确认设备已上电',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.inkSoft),
+                          ),
                         ),
                       )
                     : ListView.separated(
@@ -90,9 +101,7 @@ class _DeviceSheet extends StatelessWidget {
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
                           final r = list[i];
-                          final name = r.advertisementData.advName.isNotEmpty
-                              ? r.advertisementData.advName
-                              : (r.device.platformName.isEmpty ? '未知设备' : r.device.platformName);
+                          final name = advName(r);
                           final adv = r.advertisementData.serviceUuids.map((g) => g.str).toList();
                           final drv = pickByName(pool, name) ?? pickByServices(pool, adv.map(shortUuid).toList());
                           final saved = link.savedName.isNotEmpty && link.savedName == name;
@@ -150,4 +159,11 @@ class _DeviceSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 广播名优先，没有就用系统名，再没有就「未知设备」
+String advName(ScanResult r) {
+  if (r.advertisementData.advName.isNotEmpty) return r.advertisementData.advName;
+  if (r.device.platformName.isNotEmpty) return r.device.platformName;
+  return '未知设备';
 }

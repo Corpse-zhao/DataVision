@@ -32,3 +32,19 @@ DeviceDriver? pickByServices(List<DeviceDriver> pool, List<String> services) {
   }
   return null;
 }
+
+/// 这个名字像不像一块保护板（蚂蚁 ANT / 极空 JK 系）。
+///
+/// 车上两台设备是一起广播的，选控制器的列表里混着一堆 ANT-xxxx，
+/// 很容易点错——点错了就是拿控制器的通道去连电池，永远出不来数。
+/// 判断依据直接用保护板驱动的 nameHints，以后加品牌不用回来改这里。
+bool looksLikeBmsName(String name) {
+  final n = name.trim().toUpperCase();
+  if (n.isEmpty) return false;
+  for (final d in bmsDrivers()) {
+    for (final h in d.nameHints) {
+      if (n.startsWith(h.toUpperCase())) return true;
+    }
+  }
+  return false;
+}

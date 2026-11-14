@@ -226,8 +226,15 @@ class _CellChip extends StatelessWidget {
           Text('$index', style: const TextStyle(fontSize: 10, color: AppColors.inkSoft)),
           const SizedBox(height: 1),
           FittedBox(
-            child: Text(
-              (volts * 1000).toStringAsFixed(0),
+            // 按伏特显示（3.354V），不再用 mV 整数：一堆 3354 / 3351 的数字
+            // 得在脑子里除以一千才看得懂，压差多少全靠心算
+            child: Text.rich(
+              TextSpan(
+                text: volts.toStringAsFixed(3),
+                children: const [
+                  TextSpan(text: 'V', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500)),
+                ],
+              ),
               style: AppTheme.mono.copyWith(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
