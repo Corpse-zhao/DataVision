@@ -186,7 +186,11 @@ class Updater {
     DownloadTask task,
     void Function(int, int)? onProgress,
   ) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    // idleTimeout 是给"连上了但一直不来数据"兜底的：卡住 30 秒直接报错，
+    // 不然弹窗会永远停在某个百分比上，取消按钮也掐不断（没有 chunk 就没有检查点）
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..idleTimeout = const Duration(seconds: 30);
     IOSink? sink;
     try {
       final req = await client.getUrl(Uri.parse(url));
