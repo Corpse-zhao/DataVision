@@ -6,9 +6,8 @@ import 'ble/scanner.dart';
 import 'core/prefs.dart';
 import 'core/updater.dart';
 import 'drivers/registry.dart';
-import 'ui/bms_page.dart';
 import 'ui/console_page.dart';
-import 'ui/controller_page.dart';
+import 'ui/data_page.dart';
 import 'ui/settings_page.dart';
 import 'ui/update_dialog.dart';
 import 'ui/theme.dart';
@@ -87,8 +86,7 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     final pages = [
-      ControllerPage(link: ctrl),
-      BmsPage(link: bms),
+      DataPage(ctrl: ctrl, bms: bms),
       ConsolePage(ctrl: ctrl, bms: bms),
       SettingsPage(
         prefs: widget.prefs,
@@ -101,6 +99,9 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
         onOpenUpdate: _openUpdateDialog,
       ),
     ];
+
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width > size.height;
 
     return MaterialApp(
       title: '数据视界',
@@ -124,32 +125,34 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
               _dot(bms.phase == LinkPhase.online, '板'),
             ],
           ),
+          // 横屏时底部导航条太占地方，标签收进顶栏右上角
+          actions: wide
+              ? [_PlateTabs(index: _index, onTap: (i) => setState(() => _index = i)), const SizedBox(width: 12)]
+              : null,
         ),
         body: IndexedStack(index: _index, children: pages),
-        bottomNavigationBar: NavigationBar(
-          height: 62,
-          backgroundColor: Colors.white,
-          indicatorColor: AppColors.accent.withValues(alpha: .10),
-          selectedIndex: _index,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
-            NavigationDestination(
-                icon: Icon(Icons.memory_outlined), selectedIcon: Icon(Icons.memory), label: '控制器'),
-            NavigationDestination(
-                icon: Icon(Icons.battery_std_outlined),
-                selectedIcon: Icon(Icons.battery_std),
-                label: '保护板'),
-            NavigationDestination(
-                icon: Icon(Icons.terminal_outlined),
-                selectedIcon: Icon(Icons.terminal),
-                label: '数据台'),
-            NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: '设置'),
-          ],
-        ),
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                height: 58,
+                backgroundColor: Colors.white,
+                indicatorColor: AppColors.accent.withValues(alpha: .10),
+                selectedIndex: _index,
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                onDestinationSelected: (i) => setState(() => _index = i),
+                destinations: const [
+                  NavigationDestination(
+                      icon: Icon(Icons.speed_outlined), selectedIcon: Icon(Icons.speed), label: '数据'),
+                  NavigationDestination(
+                      icon: Icon(Icons.terminal_outlined),
+                      selectedIcon: Icon(Icons.terminal),
+                      label: '数据台'),
+                  NavigationDestination(
+                      icon: Icon(Icons.settings_outlined),
+                      selectedIcon: Icon(Icons.settings),
+                      label: '设置'),
+                ],
+              ),
       ),
     );
   }
@@ -242,6 +245,46 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
               )),
         ],
       ),
+    );
+  }
+}
+
+/// 横屏顶栏上的三个标签（代替底部导航条）
+class _PlateTabs extends StatelessWidget {
+  final int index;
+  final ValueChanged<int> onTap;
+  const _PlateTabs({required this.index, required this.onTap});
+
+  static const _labels = ['数据', '数据台', '设置'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < _labels.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => onTap(i),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: i == index ? AppColors.accent.withValues(alpha: .10) : null,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _labels[i],
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: i == index ? FontWeight.w600 : FontWeight.w400,
+                    color: i == index ? AppColors.accent : AppColors.inkSoft,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

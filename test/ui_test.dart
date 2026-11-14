@@ -8,9 +8,8 @@ import 'package:datavision/core/updater.dart';
 import 'package:datavision/drivers/jk_bms.dart';
 import 'package:datavision/drivers/lingbo.dart';
 import 'package:datavision/drivers/registry.dart';
-import 'package:datavision/ui/bms_page.dart';
 import 'package:datavision/ui/console_page.dart';
-import 'package:datavision/ui/controller_page.dart';
+import 'package:datavision/ui/data_page.dart';
 import 'package:datavision/ui/settings_page.dart';
 import 'package:datavision/ui/update_dialog.dart';
 import 'package:datavision/ui/theme.dart';
@@ -60,37 +59,77 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   }
 
-  testWidgets('控制器页有数据时布局不溢出（竖屏 390）', (tester) async {
+  testWidgets('数据页竖屏：控制器在上、保护板在下，都不溢出（390x844）', (tester) async {
     feedController();
-    await pumpAt(tester, ControllerPage(link: ctrl), const Size(390, 844));
+    feedBms();
+    await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(390, 844));
+    expect(tester.takeException(), isNull);
+    // 控制器主指标
+    expect(find.text('母线电压'), findsOneWidget);
+    // 数值和单位在同一个 Text.rich 里（"60.3V"），所以按包含匹配
+    expect(find.textContaining('60.3'), findsOneWidget);
+    // 保护板主指标 + 单体条形带的两端标注
+    expect(find.text('电量'), findsOneWidget);
+    expect(find.textContaining('最高'), findsOneWidget);
+    expect(find.textContaining('最低'), findsOneWidget);
+    // 两张卡都在同一页
+    expect(find.textContaining('· 控制器'), findsOneWidget);
+    expect(find.textContaining('· 保护板'), findsOneWidget);
+  });
+
+  testWidgets('数据页横屏：左右分栏也不溢出（844x390）', (tester) async {
+    feedController();
+    feedBms();
+    await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(844, 390));
     expect(tester.takeException(), isNull);
     expect(find.text('母线电压'), findsOneWidget);
-    expect(find.text('60.3'), findsOneWidget);
+    expect(find.text('电量'), findsOneWidget);
   });
 
-  testWidgets('控制器页横屏也正常（844x390）', (tester) async {
+  testWidgets('数据页小屏也不溢出（360x600）', (tester) async {
     feedController();
-    await pumpAt(tester, ControllerPage(link: ctrl), const Size(844, 390));
+    feedBms();
+    await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(360, 600));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('控制器页空态', (tester) async {
-    await pumpAt(tester, ControllerPage(link: ctrl), const Size(390, 844));
+  testWidgets('数据页空态：两边各给一个搜索入口', (tester) async {
+    await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(390, 844));
     expect(tester.takeException(), isNull);
     expect(find.text('还没连控制器'), findsOneWidget);
+    expect(find.text('还没连保护板'), findsOneWidget);
   });
 
-  testWidgets('保护板页渲染 16 串单体网格', (tester) async {
-    feedBms();
-    await pumpAt(tester, BmsPage(link: bms), const Size(390, 844));
+  testWidgets('数据页空态横屏也不溢出（844x390）', (tester) async {
+    await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(844, 390));
     expect(tester.takeException(), isNull);
-    expect(find.text('单体电压（16S）'), findsOneWidget);
+    expect(find.text('还没连控制器'), findsOneWidget);
+    expect(find.text('还没连保护板'), findsOneWidget);
   });
 
-  testWidgets('保护板页小屏也不溢出（360x640）', (tester) async {
-    feedBms();
-    await pumpAt(tester, BmsPage(link: bms), const Size(360, 640));
-    expect(tester.takeException(), isNull);
+  testWidgets('功率走势：两帧之后才画曲线，只有一帧不画', (tester) async {
+    final d = LingboDriver();
+    d.feed(frames.lingboCalibration());
+    d.feed(frames.lingboRealtime());
+    ctrl.driver = d;
+    await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(390, 844));
+    // 只有一帧（时间戳相同）→ 不算曲线，标题行不出现
+    expect(find.text('功率 · 近 60 秒'), findsNothing);
+
+    final trend = PowerTrend();
+    final t0 = DateTime(2026, 1, 1, 12);
+    trend.sample(t0, 300);
+    expect(trend.hasCurve, isFalse);
+    trend.sample(t0, 300); // 同一帧重复进，不该记两次
+    expect(trend.values.length, 1);
+    trend.sample(t0.add(const Duration(milliseconds: 40)), 500);
+    trend.sample(t0.add(const Duration(milliseconds: 80)), 400);
+    expect(trend.hasCurve, isTrue);
+    expect(trend.peak, 500);
+    expect(trend.average, closeTo(400, .01));
+    // 超过窗口的老点要被丢掉
+    trend.sample(t0.add(const Duration(seconds: 120)), 200);
+    expect(trend.values.length, 1);
   });
 
   testWidgets('数据台与设置页能渲染', (tester) async {
