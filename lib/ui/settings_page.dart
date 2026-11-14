@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../ble/link.dart';
 import '../core/prefs.dart';
+import '../core/updater.dart';
 import 'theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -11,6 +12,11 @@ class SettingsPage extends StatefulWidget {
   final String version;
   final VoidCallback onCheckUpdate;
   final VoidCallback onOpenDownloadPage;
+
+  /// 查到有新版本时非 null：版本号旁边会显示「检测到新版本」
+  final UpdateInfo? update;
+  final VoidCallback onOpenUpdate;
+
   const SettingsPage({
     super.key,
     required this.prefs,
@@ -19,6 +25,8 @@ class SettingsPage extends StatefulWidget {
     required this.version,
     required this.onCheckUpdate,
     required this.onOpenDownloadPage,
+    this.update,
+    required this.onOpenUpdate,
   });
 
   @override
@@ -153,7 +161,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   const Expanded(child: Text('版本', style: TextStyle(fontSize: 13.5))),
                   Text(widget.version, style: AppTheme.mono.copyWith(fontSize: 13)),
-                  const SizedBox(width: 4),
+                  if (widget.update != null)
+                    _UpdateBadge(
+                      version: widget.update!.version,
+                      onTap: widget.onOpenUpdate,
+                    ),
+                  const SizedBox(width: 2),
                   TextButton(
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -259,6 +272,46 @@ class _SupportRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 版本号旁边的小提示：查到新版本才出现，点一下直接弹更新面板
+class _UpdateBadge extends StatelessWidget {
+  final String version;
+  final VoidCallback onTap;
+  const _UpdateBadge({required this.version, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Material(
+        color: AppColors.accent.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.arrow_circle_up_rounded, size: 12, color: AppColors.accent),
+                const SizedBox(width: 3),
+                Text(
+                  '检测到新版本',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

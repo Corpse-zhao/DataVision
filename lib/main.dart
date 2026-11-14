@@ -42,6 +42,9 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
   int _index = 0;
   bool _checkingUpdate = false;
 
+  /// 查到的新版本；null 表示没有（或还没查过）。设置页靠它显示「检测到新版本」
+  UpdateInfo? _available;
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +97,8 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
         version: Updater.instance.displayVersion,
         onCheckUpdate: () => _checkUpdate(auto: false),
         onOpenDownloadPage: () => Updater.instance.openDownloadPage(),
+        update: _available,
+        onOpenUpdate: _openUpdateDialog,
       ),
     ];
 
@@ -159,19 +164,15 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
       final info = await Updater.instance.check();
       await widget.prefs.markUpdateChecked();
       if (!mounted) return;
+      if (_available?.version != info?.version) {
+        setState(() => _available = info);
+      }
       if (info == null) {
         if (!auto) _toast('已经是最新版本 ${Updater.instance.displayVersion}');
         return;
       }
-      final ctx = _navKey.currentContext;
-      if (ctx == null || !ctx.mounted) return;
-      final result = await showUpdateDialog(ctx, info);
-      if (!mounted) return;
-      if (result == 'installing') {
-        _toast('安装包已交给系统，按提示完成覆盖安装');
-      } else if (result == 'opened') {
-        _toast('已在浏览器打开，下载后用全能签重新签名安装');
-      }
+      await _openUpdateDialog();
+      return;
     } on DownloadFailed catch (e) {
       // 查不到版本时不要只留一句"失败"，直接给个能点的手动出口
       if (!auto && mounted) {
@@ -181,6 +182,21 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
       if (!auto && mounted) _toast('检查更新失败');
     } finally {
       _checkingUpdate = false;
+    }
+  }
+
+  /// 弹更新面板（自动查到、或设置页点「检测到新版本」都走这里）
+  Future<void> _openUpdateDialog() async {
+    final info = _available;
+    if (info == null) return;
+    final ctx = _navKey.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+    final result = await showUpdateDialog(ctx, info);
+    if (!mounted) return;
+    if (result == 'installing') {
+      _toast('安装包已交给系统，按提示完成覆盖安装');
+    } else if (result == 'opened') {
+      _toast('已在浏览器打开，下载后用全能签重新签名安装');
     }
   }
 

@@ -95,11 +95,11 @@ class Updater {
   String get currentVersion => _currentVersion;
   int get currentBuild => _currentBuild;
 
-  /// 界面上显示的版本号，形如 v1.0.4 (5)
-  String get displayVersion {
-    if (_currentVersion.isEmpty) return '—';
-    return _currentBuild > 0 ? 'v$_currentVersion ($_currentBuild)' : 'v$_currentVersion';
-  }
+  /// 界面上只显示版本号，形如 v1.0.6。
+  ///
+  /// 构建号不显示：之前写成 "v1.0.6 (7)"，括号里的 7 太容易被读成版本号的一截
+  /// （"是不是 1.0.7 了？"）。构建号只用来给系统比新旧，留在内部就够了。
+  String get displayVersion => _currentVersion.isEmpty ? '—' : 'v$_currentVersion';
 
   Future<void> init() async {
     try {

@@ -104,13 +104,48 @@ void main() {
           prefs: prefs,
           ctrl: ctrl,
           bms: bms,
-          version: 'v1.0.6 (7)',
+          version: 'v1.0.7',
           onCheckUpdate: () {},
-          onOpenDownloadPage: () {}),
+          onOpenDownloadPage: () {},
+          onOpenUpdate: () {}),
       const Size(390, 844),
     );
     expect(tester.takeException(), isNull);
     expect(find.text('自动连接'), findsOneWidget);
+    // 没查到新版本时不该出现这个提示
+    expect(find.text('检测到新版本'), findsNothing);
+  });
+
+  testWidgets('查到新版本时版本号旁边出现提示', (tester) async {
+    feedController();
+    await pumpAt(
+      tester,
+      SettingsPage(
+        prefs: prefs,
+        ctrl: ctrl,
+        bms: bms,
+        version: 'v1.0.6',
+        onCheckUpdate: () {},
+        onOpenDownloadPage: () {},
+        update: const UpdateInfo(
+          tag: 'v1.0.7',
+          version: '1.0.7',
+          notes: '修了点什么',
+          apkUrl: 'https://example.com/a.apk',
+          ipaUrl: 'https://example.com/a.ipa',
+          apkSize: 51235328,
+          ipaSize: 6942996,
+          pageUrl: 'https://example.com/releases',
+        ),
+        onOpenUpdate: () {},
+      ),
+      // 画布给高一点：设置页是长列表，「关于」在最后，默认 640 高度不会构建到那里
+      const Size(390, 1800),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('检测到新版本'), findsOneWidget);
+    // 版本号只显示 v1.0.6，不带括号里的构建号
+    expect(find.text('v1.0.6'), findsOneWidget);
   });
 
   testWidgets('更新弹窗在小屏上不溢出', (tester) async {
