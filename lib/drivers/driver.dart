@@ -25,6 +25,12 @@ abstract class DeviceDriver {
 
   int get pollIntervalMs => 400;
 
+  /// 多久没收到帧就当成「假在线」（换信道 / 重连）。
+  /// 慢速协议调大一点：蚂蚁板一帧 152 字节要分 8 包通知上来，
+  /// 掉一包就得等下一轮，6 秒太紧，会误判成断线然后主动重连，越重连越没数据。
+  static const defaultStaleSeconds = 6;
+  int get staleTimeoutSeconds => defaultStaleSeconds;
+
   /// 被动型（远驱）：连上就自己推，不发请求
   bool get passive => false;
 

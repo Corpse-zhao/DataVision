@@ -20,6 +20,14 @@ class ScanBus {
 
   Stream<List<ScanResult>> get stream => _controller.stream;
 
+  /// 有没有链路已经连上。连上之后扫描要降频：
+  /// 一边连着一边全速扫，射频时间被扫描占掉，已经连上的设备会开始丢包、假掉线。
+  bool Function()? busyProbe;
+
+  /// 扫描窗口：空闲时 20 秒（凑满能搜到慢广播的设备），有连接时 8 秒（够用就好）
+  static const _idleWindow = Duration(seconds: 20);
+  static const _busyWindow = Duration(seconds: 8);
+
   Future<void> join(Object owner) async {
     _refs.add(owner);
     _sub ??= FlutterBluePlus.onScanResults.listen(
@@ -62,9 +70,10 @@ class ScanBus {
     if (FlutterBluePlus.isScanningNow) return;
     _starting = true;
     _lastStart = DateTime.now();
+    final busy = busyProbe?.call() ?? false;
     try {
       await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: 20),
+        timeout: busy ? _busyWindow : _idleWindow,
         continuousUpdates: true,
         androidUsesFineLocation: false,
       );

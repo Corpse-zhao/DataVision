@@ -53,6 +53,8 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
     bms = BleLink(role: 'bms', pool: bmsDrivers(), prefs: widget.prefs);
     ctrl.addListener(_refresh);
     bms.addListener(_refresh);
+    // 连上任意一条后，全局扫描降频：边连边全速扫会抢射频，已连的设备开始丢包
+    ScanBus.instance.busyProbe = () => ctrl.connected || bms.connected;
     ctrl.init();
     bms.init();
     // 上次开的常亮，这次启动接着生效（默认关，不会平白多耗电）

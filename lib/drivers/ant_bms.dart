@@ -35,6 +35,10 @@ class AntBmsDriver extends DeviceDriver {
   @override
   int get pollIntervalMs => 400;
 
+  /// 152 字节要分 8 包通知，丢一包就得等下一轮；6 秒太急，会被误判成掉线
+  @override
+  int get staleTimeoutSeconds => 12;
+
   @override
   List<List<int>> pollFrames(int tick) => const [statusRequest];
 

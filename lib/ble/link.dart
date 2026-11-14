@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -77,6 +78,9 @@ class BleLink extends ChangeNotifier {
   int _reconnectAttempt = 0;
   bool _gotFrame = false;
   bool _disposed = false;
+  DateTime? _lastProbeAt;
+  int _lastProbeIdx = 0;
+  DateTime? _lastRawNotifyAt;
 
   bool get connected => _device?.isConnected ?? false;
   bool get isScanning => _scanning;
@@ -234,6 +238,15 @@ class BleLink extends ChangeNotifier {
       return;
     }
 
+    // Android 默认给 balanced 连接参数（30~50ms 一个连接事件），
+    // 蚂蚁板这种 152 字节 / 8 包的长帧容易被拖慢；high 档能明显缩短单帧时间。
+    // iOS 没有这个接口，失败也不影响连接本身。
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        await device.requestConnectionPriority(connectionPriorityRequest: ConnectionPriority.high);
+      } catch (_) {}
+    }
+
     // 连上就记住：哪怕协议还没认出来，下次也要能自动连回来
     final rid = device.remoteId.str;
     final nm = deviceName.isEmpty ? '未命名设备' : deviceName;
@@ -290,7 +303,13 @@ class BleLink extends ChangeNotifier {
       return;
     }
 
-    for (final c in notify) {
+    // 只订驱动点名的通知口；一个都没命中（换了固件 / 不认识）才退回订前 3 个。
+    // 原来无差别订阅所有 notify：蚂蚁板有 5~6 个可通知口，多订的只会抢带宽、
+    // 拖慢 152 字节长帧的拼装，表现出来就是「数据一顿一顿、偶尔假掉线」。
+    final notifyHints = driver?.notifyHints ?? const <String>[];
+    final hinted = notify.where((c) => notifyHints.contains(shortUuid(c.uuid.str))).toList();
+    final targets = hinted.isNotEmpty ? hinted : notify.take(3).toList();
+    for (final c in targets) {
       try {
         await c.setNotifyValue(true);
         _subs.add(c.onValueReceived.listen((data) => feedInput(data, c)));
@@ -352,7 +371,52 @@ class BleLink extends ChangeNotifier {
       await _write(f);
     }
 
+    await _probeChannels();
     _startPolling();
+  }
+
+  /// 连上后先向最多 3 条可写信道各发一帧（间隔 120ms）。
+  ///
+  /// 蚂蚁板「三条信道只有一条能写」：原先是 1.6 秒才换一条，正确的那条排第 3 位
+  /// 就得等将近 5 秒才出第一帧。一起试探后，正确那条一般几百毫秒就回数据，
+  /// 收到首帧时再把信道锁到「最后发出去的那条」。
+  Future<void> _probeChannels() async {
+    final d = driver;
+    if (d == null || d.passive || _writeChars.length <= 1) return;
+    final frames = d.initialFrames.isNotEmpty ? d.initialFrames : d.pollFrames(1);
+    if (frames.isEmpty) return;
+
+    final n = _writeChars.length < 3 ? _writeChars.length : 3;
+    for (var i = 0; i < n; i++) {
+      final c = _writeChars[i];
+      for (final f in frames) {
+        try {
+          await c.write(f, withoutResponse: c.properties.writeWithoutResponse);
+        } catch (_) {
+          // 这条写不动就先放过，后面按原逻辑回退
+        }
+      }
+      _lastProbeAt = DateTime.now();
+      _lastProbeIdx = i;
+      if (i < n - 1) await Future<void>.delayed(const Duration(milliseconds: 120));
+    }
+    // 试探完把当前信道放回原来那条，等首帧回来再由 _commitProbedChannel 定
+    _writeChar = _writeChars[channelIndex.clamp(0, _writeChars.length - 1)];
+    _channelStartedAt = DateTime.now();
+  }
+
+  /// 首帧回来时，如果刚做过信道试探，就锁到最后发出去的那条上
+  void _commitProbedChannel() {
+    final at = _lastProbeAt;
+    if (at == null || _writeChars.length <= 1) return;
+    if (DateTime.now().difference(at).inMilliseconds > 900) return;
+    if (_lastProbeIdx >= _writeChars.length) return;
+    _lastProbeAt = null;
+    channelIndex = _lastProbeIdx;
+    _writeChar = _writeChars[channelIndex];
+    _channelStartedAt = DateTime.now();
+    _updateGattInfo();
+    _log('!', '信道锁定 ${channelIndex + 1}/$channelCount（试探命中）');
   }
 
   void _startPolling() {
@@ -368,7 +432,7 @@ class BleLink extends ChangeNotifier {
     // 假在线：连着但 6 秒没有一帧 —— 先换信道，两次都不行就重连
     if (_gotFrame && _lastFrameAt != null) {
       final gap = DateTime.now().difference(_lastFrameAt!);
-      if (gap.inSeconds >= 6) {
+      if (gap.inSeconds >= (driver?.staleTimeoutSeconds ?? 6)) {
         _staleHits++;
         if (_staleHits <= 2 && _writeChars.length > 1) {
           _nextChannel();
@@ -383,7 +447,7 @@ class BleLink extends ChangeNotifier {
 
     // 还没出数据：一条信道试 1.6 秒，不行换下一条
     if (!_gotFrame && _writeChars.length > 1) {
-      final windowMs = _channelRounds == 0 ? 1600 : 2500;
+      final windowMs = _channelRounds == 0 ? 1000 : 1600;
       if (DateTime.now().difference(_channelStartedAt).inMilliseconds > windowMs) {
         _nextChannel();
       }
@@ -441,7 +505,7 @@ class BleLink extends ChangeNotifier {
     lastHex = hex(data, max: 48);
 
     var parsed = false;
-    for (final d in pool) {
+    void tryFeed(DeviceDriver d) {
       if (d.feed(data)) {
         parsed = true;
         if (driver != d) {
@@ -453,7 +517,25 @@ class BleLink extends ChangeNotifier {
       }
     }
 
+    final locked = driver;
+    if (locked == null) {
+      for (final d in pool) {
+        tryFeed(d);
+      }
+    } else {
+      // 认定了就只喂它：让别的驱动跟着解析既白耗 CPU，缓冲里还会攒一堆无用字节
+      tryFeed(locked);
+      // 还没出过帧说明这个驱动只是按广播名猜的，让别的也嗅一眼
+      if (!parsed && !_gotFrame) {
+        for (final d in pool) {
+          if (!identical(d, locked)) tryFeed(d);
+        }
+      }
+    }
+
     if (parsed) {
+      // 首帧可能就是信道试探打出来的，趁热把信道锁定
+      _commitProbedChannel();
       _gotFrame = true;
       _staleHits = 0;
       _lastFrameAt = DateTime.now();
@@ -463,9 +545,19 @@ class BleLink extends ChangeNotifier {
       if (phase != LinkPhase.online) _setPhase(LinkPhase.online, '在线');
       _persistLock();
       notifyListeners();
-    } else {
+    } else if (_rawNotifyAllowed()) {
+      // 没解析出整帧的原始字节：数据台看 hex 用，最多 3Hz 刷一次。
+      // 蚂蚁板一帧要 8 个通知包，包包都通知就是每秒二十几次全界面重绘。
       notifyListeners();
     }
+  }
+
+  bool _rawNotifyAllowed() {
+    final now = DateTime.now();
+    final last = _lastRawNotifyAt;
+    if (last != null && now.difference(last).inMilliseconds < 330) return false;
+    _lastRawNotifyAt = now;
+    return true;
   }
 
   /// 跑通之后把「设备 + 信道」记下来，下次开机直接连、直接用对信道
@@ -521,7 +613,9 @@ class BleLink extends ChangeNotifier {
   void _scheduleReconnect() {
     _reconnectTimer?.cancel();
     _reconnectAttempt++;
-    final delay = Duration(milliseconds: (600 * _reconnectAttempt).clamp(600, 6000));
+    // 首轮等 1.2 秒再连：掉线的瞬间板子往往还在收尾，立刻直连容易被拒，
+    // 一被拒又要等下一轮，看起来就是「怎么都连不上」
+    final delay = Duration(milliseconds: (900 * _reconnectAttempt).clamp(900, 6000));
     _reconnectTimer = Timer(delay, () async {
       if (_disposed || connected) return;
       final id = prefs.deviceId(role);

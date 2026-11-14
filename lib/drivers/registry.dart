@@ -48,3 +48,13 @@ bool looksLikeBmsName(String name) {
   }
   return false;
 }
+
+/// 这台设备是不是「认识的」——名字命中品牌，或者广播里带着已知服务。
+///
+/// 扫描列表默认只留认识的：小区里一开蓝牙能收十几个耳机、手环、共享单车锁，
+/// 全列出来等于让人在噪音里找自己的车。认不出来的收进「显示全部」后面。
+bool looksKnown(List<DeviceDriver> pool, String name, List<String> services) {
+  if (pickByName(pool, name) != null) return true;
+  if (pickByServices(pool, services) != null) return true;
+  return false;
+}
