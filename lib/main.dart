@@ -93,6 +93,7 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
         bms: bms,
         version: Updater.instance.displayVersion,
         onCheckUpdate: () => _checkUpdate(auto: false),
+        onOpenDownloadPage: () => Updater.instance.openDownloadPage(),
       ),
     ];
 
@@ -172,7 +173,10 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
         _toast('已在浏览器打开，下载后用全能签重新签名安装');
       }
     } on DownloadFailed catch (e) {
-      if (!auto && mounted) _toast(e.message);
+      // 查不到版本时不要只留一句"失败"，直接给个能点的手动出口
+      if (!auto && mounted) {
+        _toast(e.message, action: '打开下载页');
+      }
     } catch (_) {
       if (!auto && mounted) _toast('检查更新失败');
     } finally {
@@ -180,12 +184,18 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
     }
   }
 
-  void _toast(String text) {
+  void _toast(String text, {String? action}) {
     _msgKey.currentState?.showSnackBar(
       SnackBar(
         content: Text(text),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
+        duration: Duration(seconds: action == null ? 3 : 6),
+        action: action == null
+            ? null
+            : SnackBarAction(
+                label: action,
+                onPressed: () => Updater.instance.openDownloadPage(),
+              ),
       ),
     );
   }

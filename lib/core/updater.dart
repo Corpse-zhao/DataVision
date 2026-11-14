@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'native.dart';
 
@@ -64,8 +65,22 @@ class Updater {
   static final Updater instance = Updater._();
 
   static const repo = 'Corpse-zhao/DataVision';
-  static const apiUrl = 'https://api.github.com/repos/$repo/releases/latest';
-  static const pageUrl = 'https://github.com/$repo/releases/latest';
+  static const pageUrl = 'https://github.com/$repo/releases';
+
+  /// 用列表接口而不是 /releases/latest：latest 不返回被标成 prerelease 的版本，
+  /// 而 CI 建 release 时确实标过 prerelease，结果接口直接 404，前端看着就像"网络不通"。
+  /// 列表接口一律返回全部，自己在里面挑版本号最大的那个，反而更稳。
+  static const apiListUrl = 'https://api.github.com/repos/$repo/releases?per_page=10';
+
+  /// API 走不通时（运营商封 api.github.com）退回静态文件，多线路并发取
+  static const staticVersionUrls = <String>[
+    'https://cdn.jsdelivr.net/gh/$repo@main/version.json',
+    'https://fastly.jsdelivr.net/gh/$repo@main/version.json',
+    'https://gcore.jsdelivr.net/gh/$repo@main/version.json',
+    'https://raw.githubusercontent.com/$repo/main/version.json',
+    'https://ghfast.top/https://raw.githubusercontent.com/$repo/main/version.json',
+  ];
+
   static const _ua = 'DataVision-Updater';
 
   /// 国内直连 release 资产经常断，按顺序试，第一个成了就停
@@ -96,19 +111,51 @@ class Updater {
     }
   }
 
-  /// 查最新版本；没有新版本或网络不通都返回 null（静默）。
-  Future<UpdateInfo?> check({Duration timeout = const Duration(seconds: 12)}) async {
+  /// 查最新版本。返回 null = 已经是最新的；连不上则抛 [DownloadFailed]。
+  Future<UpdateInfo?> check({Duration timeout = const Duration(seconds: 7)}) async {
     if (_currentVersion.isEmpty) return null;
-    final json = await _getJson(apiUrl, timeout);
-    // 网络不通要能和「已经是最新版」区分开，所以这里抛，不返回 null
-    if (json == null) throw const DownloadFailed('查不到版本信息，检查一下网络或稍后再试');
 
-    final tag = (json['tag_name'] as String?)?.trim() ?? '';
-    if (tag.isEmpty) return null;
-    final latest = normalizeVersion(tag);
-    if (latest.isEmpty) return null;
-    if (compareVersions(latest, _currentVersion) <= 0) return null;
+    var info = await _fromApi(timeout);
+    info ??= await _fromStatic(timeout);
+    if (info == null) {
+      throw const DownloadFailed('连不上更新服务器，可以点「打开下载页」手动看');
+    }
+    if (compareVersions(info.version, _currentVersion) <= 0) return null;
+    return info;
+  }
 
+  /// 线路一：GitHub API 的 release 列表，挑版本号最大的那条（draft 不算）。
+  Future<UpdateInfo?> _fromApi(Duration timeout) async {
+    final raw = await _getJson(apiListUrl, timeout);
+    if (raw is! List) return null;
+    return pickNewestRelease(raw);
+  }
+
+  /// 线路二：仓库里的 version.json，走 jsDelivr / raw 等多条 CDN。
+  Future<UpdateInfo?> _fromStatic(Duration timeout) async {
+    final map = await _firstJson(staticVersionUrls, timeout);
+    if (map == null) return null;
+    return infoFromStatic(map);
+  }
+
+  /// 从 release 列表里挑版本最高的（忽略 draft，但**不忽略 prerelease**）——
+  /// 就是这条规则踩过坑，所以留个公开方法方便测试。
+  static UpdateInfo? pickNewestRelease(List<dynamic> list) {
+    UpdateInfo? best;
+    for (final item in list) {
+      if (item is! Map) continue;
+      if (item['draft'] == true) continue;
+      final tag = (item['tag_name'] as String?)?.trim() ?? '';
+      final version = normalizeVersion(tag);
+      if (tag.isEmpty || version.isEmpty) continue;
+      if (best != null && compareVersions(version, best.version) <= 0) continue;
+      best = infoFromRelease(item, tag, version);
+    }
+    return best;
+  }
+
+  /// 把一个 release 的 JSON 折成 UpdateInfo；资产地址缺失时按命名规则拼。
+  static UpdateInfo infoFromRelease(Map<dynamic, dynamic> json, String tag, String version) {
     var apkUrl = '';
     var ipaUrl = '';
     var apkSize = 0;
@@ -129,17 +176,64 @@ class Updater {
         }
       }
     }
-
     return UpdateInfo(
       tag: tag,
-      version: latest,
+      version: version,
       notes: (json['body'] as String?) ?? '',
-      apkUrl: apkUrl.isEmpty ? null : apkUrl,
-      ipaUrl: ipaUrl.isEmpty ? null : ipaUrl,
+      apkUrl: apkUrl.isEmpty ? _assetUrl(tag, 'apk') : apkUrl,
+      ipaUrl: ipaUrl.isEmpty ? _assetUrl(tag, 'ipa') : ipaUrl,
       apkSize: apkSize,
       ipaSize: ipaSize,
       pageUrl: (json['html_url'] as String?) ?? pageUrl,
     );
+  }
+
+  /// version.json 的结构：{"version": "1.0.6", "tag": "v1.0.6", "notes": "..."}
+  static UpdateInfo? infoFromStatic(Map<dynamic, dynamic> json) {
+    final version = normalizeVersion((json['version'] as String?) ?? (json['tag'] as String?) ?? '');
+    if (version.isEmpty) return null;
+    final tag = ((json['tag'] as String?)?.trim().isNotEmpty ?? false)
+        ? (json['tag'] as String).trim()
+        : 'v$version';
+    return UpdateInfo(
+      tag: tag,
+      version: version,
+      notes: (json['notes'] as String?) ?? '',
+      apkUrl: _assetUrl(tag, 'apk'),
+      ipaUrl: _assetUrl(tag, 'ipa'),
+      apkSize: (json['apkSize'] as num?)?.toInt() ?? 0,
+      ipaSize: (json['ipaSize'] as num?)?.toInt() ?? 0,
+      pageUrl: (json['page'] as String?) ?? pageUrl,
+    );
+  }
+
+  static String _assetUrl(String tag, String ext) =>
+      'https://github.com/$repo/releases/download/$tag/DataVision-$tag.$ext';
+
+  /// 打开下载页（iOS 没有 App 内安装，这个是给用户的出口）
+  Future<bool> openDownloadPage() async {
+    try {
+      return await launchUrl(Uri.parse(pageUrl), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 多条线路同时打，谁先给出有效 JSON 就用谁；全挂了才返回 null。
+  Future<Map<String, dynamic>?> _firstJson(List<String> urls, Duration timeout) async {
+    final completer = Completer<Map<String, dynamic>?>();
+    var pending = urls.length;
+    for (final url in urls) {
+      _getJson(url, timeout).then((value) {
+        if (value is Map<String, dynamic> && !completer.isCompleted) {
+          completer.complete(value);
+        }
+      }).whenComplete(() {
+        pending--;
+        if (pending == 0 && !completer.isCompleted) completer.complete(null);
+      });
+    }
+    return completer.future;
   }
 
   /// 带进度地下载 APK，直接落到原生给的 update 目录。
@@ -232,7 +326,7 @@ class Updater {
     }
   }
 
-  Future<Map<String, dynamic>?> _getJson(String url, Duration timeout) async {
+  Future<dynamic> _getJson(String url, Duration timeout) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     try {
       final req = await client.getUrl(Uri.parse(url)).timeout(timeout);
@@ -241,8 +335,7 @@ class Updater {
       final res = await req.close().timeout(timeout);
       if (res.statusCode != HttpStatus.ok) return null;
       final body = await res.transform(utf8.decoder).join().timeout(timeout);
-      final decoded = jsonDecode(body);
-      return decoded is Map<String, dynamic> ? decoded : null;
+      return jsonDecode(body);
     } catch (_) {
       return null;
     } finally {

@@ -101,7 +101,12 @@ void main() {
     await pumpAt(
       tester,
       SettingsPage(
-          prefs: prefs, ctrl: ctrl, bms: bms, version: 'v1.0.4 (5)', onCheckUpdate: () {}),
+          prefs: prefs,
+          ctrl: ctrl,
+          bms: bms,
+          version: 'v1.0.6 (7)',
+          onCheckUpdate: () {},
+          onOpenDownloadPage: () {}),
       const Size(390, 844),
     );
     expect(tester.takeException(), isNull);

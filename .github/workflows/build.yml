@@ -60,23 +60,18 @@ jobs:
           name: datavision-ipa
           path: DataVision-v${{ steps.ver.outputs.version }}.ipa
 
+      - name: 生成发布说明
+        run: python3 tools/release_body.py "${{ steps.ver.outputs.version }}"
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
           name: 数据视界 v${{ steps.ver.outputs.version }}
-          body: |
-            数据视界 v${{ steps.ver.outputs.version }}
-
-            只读控制器 + 保护板数据，不做仪表、不算车速。
-
-            - 控制器：凌博 LBMC / 远驱 Fardriver·VOTOL·YuanQu / VESC 系（Flipsky·MakerX·Trampa）
-            - 保护板：蚂蚁 ANT（三条信道自动回退）/ 极空 JK
-            - 第一次手动选设备，之后搜到就自动连
-            - 数据台可看原始字节，方便以后加新协议
-
-            iOS 包为 ad-hoc 签名，越狱设备经 TrollStore / AppSync / Sideloadly 安装。
+          # 两个 job 共用同一份正文，避免后跑完的把前一个的说明覆盖掉
+          body_path: release-body.md
           files: DataVision-v${{ steps.ver.outputs.version }}.ipa
-          prerelease: true
+          # 千万别再标 prerelease：/releases/latest 不返回预发布版本，客户端会 404
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -119,14 +114,15 @@ jobs:
           name: datavision-apk
           path: DataVision-v${{ steps.ver.outputs.version }}.apk
 
+      - name: 生成发布说明
+        run: python3 tools/release_body.py "${{ steps.ver.outputs.version }}"
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
           name: 数据视界 v${{ steps.ver.outputs.version }}
-          body: |
-            数据视界 v${{ steps.ver.outputs.version }}
-            APK：直接安装即可（已用固定密钥签名，可直接覆盖升级）。
+          body_path: release-body.md
           files: DataVision-v${{ steps.ver.outputs.version }}.apk
-          prerelease: true
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

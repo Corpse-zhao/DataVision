@@ -76,8 +76,16 @@ APK 用仓库内固定 keystore 签名（`android/app/datavision.jks`），后�
 ## 在线更新
 
 更新源不是自建服务器，是仓库自己的 GitHub Releases —— 仓库公开，接口和资产都免费。
-`core/updater.dart` 走 `GET /repos/Corpse-zhao/DataVision/releases/latest`，拿 `tag_name` 和本地版本按数字段比，
-比本地新才提示；`releases/latest` 天然只指向最新一条，旧版本不会误报。
+
+查版本有两条线路，一条不通自动走另一条：
+
+1. `GET /repos/Corpse-zhao/DataVision/releases?per_page=10` —— 拿列表，自己挑版本号最大的那条。
+   **不用 `/releases/latest`**：它不返回被标成 prerelease 的版本，而 CI 早期确实把 release 标成了
+   预发布，接口直接 404，客户端看起来就跟"网络不通"一模一样 —— 这个坑真踩过。
+2. `version.json`（仓库根目录）经 jsDelivr / raw / ghfast 多线路并发拉取，哪条先回来用哪条。
+
+`version.json` 里的版本号必须和 `pubspec.yaml` 一致，`test/updater_test.dart` 里有条测试专门守着这件事，
+不一致直接构建失败 —— 否则更新通道会指向一个不存在的包。
 
 两端能力不一样，这是系统决定的，不是实现取舍：
 

@@ -10,6 +10,7 @@ class SettingsPage extends StatefulWidget {
   final BleLink bms;
   final String version;
   final VoidCallback onCheckUpdate;
+  final VoidCallback onOpenDownloadPage;
   const SettingsPage({
     super.key,
     required this.prefs,
@@ -17,6 +18,7 @@ class SettingsPage extends StatefulWidget {
     required this.bms,
     required this.version,
     required this.onCheckUpdate,
+    required this.onOpenDownloadPage,
   });
 
   @override
@@ -176,6 +178,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Text(
                   '安卓端可直接在 App 内下载更新；iOS 需要下载 IPA 后用全能签重签安装。',
                   style: TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: widget.onOpenDownloadPage,
+                  child: const Text('打开下载页（更新检查不通时用）',
+                      style: TextStyle(fontSize: 12)),
                 ),
               ),
             ],
