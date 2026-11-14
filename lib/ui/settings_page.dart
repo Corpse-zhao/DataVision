@@ -9,12 +9,14 @@ class SettingsPage extends StatefulWidget {
   final BleLink ctrl;
   final BleLink bms;
   final String version;
+  final VoidCallback onCheckUpdate;
   const SettingsPage({
     super.key,
     required this.prefs,
     required this.ctrl,
     required this.bms,
     required this.version,
+    required this.onCheckUpdate,
   });
 
   @override
@@ -149,14 +151,31 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   const Expanded(child: Text('版本', style: TextStyle(fontSize: 13.5))),
                   Text(widget.version, style: AppTheme.mono.copyWith(fontSize: 13)),
+                  const SizedBox(width: 4),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: widget.onCheckUpdate,
+                    child: const Text('检查更新', style: TextStyle(fontSize: 12)),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '数据视界 · 只看控制器和保护板的数据，不做仪表、不算车速。',
                   style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft, height: 1.5),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '安卓端可直接在 App 内下载更新；iOS 需要下载 IPA 后用全能签重签安装。',
+                  style: TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
                 ),
               ),
             ],

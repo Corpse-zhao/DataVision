@@ -18,6 +18,7 @@ class Prefs {
   static const _kPolePairs = 'fardriver_pole_pairs';
   static const _kPollMs = 'poll_ms';
   static const _kShowAll = 'show_all';
+  static const _kUpdateCheck = 'update_check_at';
 
   late SharedPreferences _sp;
 
@@ -69,6 +70,20 @@ class Prefs {
   }
 
   set pollMs(int v) => _sp.setInt(_kPollMs, v.clamp(200, 2000));
+
+  /// 上次检查更新的时间戳（毫秒）。自动检查按这个做节流，别每切回前台就打一次 API
+  /// —— GitHub 未授权接口 60 次/小时，打爆了就是一段时间内彻底查不到。
+  int get lastUpdateCheck => _sp.getInt(_kUpdateCheck) ?? 0;
+
+  Future<void> markUpdateChecked() =>
+      _sp.setInt(_kUpdateCheck, DateTime.now().millisecondsSinceEpoch);
+
+  /// 自动检查是否该跑了（默认 6 小时一次）
+  bool shouldCheckUpdate({Duration every = const Duration(hours: 6)}) {
+    final last = lastUpdateCheck;
+    if (last == 0) return true;
+    return DateTime.now().millisecondsSinceEpoch - last >= every.inMilliseconds;
+  }
 
   Map<String, dynamic> debugDump() => {
         'ctrl': deviceName('controller'),

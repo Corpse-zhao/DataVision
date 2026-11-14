@@ -4,14 +4,14 @@ import 'package:flutter/services.dart';
 import 'ble/link.dart';
 import 'ble/scanner.dart';
 import 'core/prefs.dart';
+import 'core/updater.dart';
 import 'drivers/registry.dart';
 import 'ui/bms_page.dart';
 import 'ui/console_page.dart';
 import 'ui/controller_page.dart';
 import 'ui/settings_page.dart';
+import 'ui/update_dialog.dart';
 import 'ui/theme.dart';
-
-const appVersion = '1.0.0';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +22,7 @@ Future<void> main() async {
   ]);
   final prefs = Prefs();
   await prefs.load();
+  await Updater.instance.init();
   runApp(DataVisionApp(prefs: prefs));
 }
 
@@ -36,7 +37,10 @@ class DataVisionApp extends StatefulWidget {
 class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserver {
   late final BleLink ctrl;
   late final BleLink bms;
+  final _navKey = GlobalKey<NavigatorState>();
+  final _msgKey = GlobalKey<ScaffoldMessengerState>();
   int _index = 0;
+  bool _checkingUpdate = false;
 
   @override
   void initState() {
@@ -48,6 +52,8 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
     bms.addListener(_refresh);
     ctrl.init();
     bms.init();
+    // 首帧之后再查，别和蓝牙初始化抢启动时间
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdate(auto: true));
   }
 
   void _refresh() {
@@ -62,6 +68,8 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
       if (!bms.connected) bms.startScan(auto: true);
       // 后台待久了系统早把扫描停了，回来立刻补一次，不用等下一个窗口
       ScanBus.instance.restart();
+      // 更新检查跟着前台节奏走，内部有 6 小时节流，不会每次都打接口
+      _checkUpdate(auto: true);
     }
   }
 
@@ -79,11 +87,19 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
       ControllerPage(link: ctrl),
       BmsPage(link: bms),
       ConsolePage(ctrl: ctrl, bms: bms),
-      SettingsPage(prefs: widget.prefs, ctrl: ctrl, bms: bms, version: appVersion),
+      SettingsPage(
+        prefs: widget.prefs,
+        ctrl: ctrl,
+        bms: bms,
+        version: Updater.instance.displayVersion,
+        onCheckUpdate: () => _checkUpdate(auto: false),
+      ),
     ];
 
     return MaterialApp(
       title: '数据视界',
+      navigatorKey: _navKey,
+      scaffoldMessengerKey: _msgKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: Scaffold(
@@ -128,6 +144,48 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
                 label: '设置'),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 查更新。auto=true 时受 6 小时节流，静默失败；手动点就一定要给个回音。
+  Future<void> _checkUpdate({bool auto = false}) async {
+    if (_checkingUpdate) return;
+    if (auto && !widget.prefs.shouldCheckUpdate()) return;
+    _checkingUpdate = true;
+    try {
+      if (!auto) _toast('正在检查更新…');
+      final info = await Updater.instance.check();
+      await widget.prefs.markUpdateChecked();
+      if (!mounted) return;
+      if (info == null) {
+        if (!auto) _toast('已经是最新版本 ${Updater.instance.displayVersion}');
+        return;
+      }
+      final ctx = _navKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+      final result = await showUpdateDialog(ctx, info);
+      if (!mounted) return;
+      if (result == 'installing') {
+        _toast('安装包已交给系统，按提示完成覆盖安装');
+      } else if (result == 'opened') {
+        _toast('已在浏览器打开，下载后用全能签重新签名安装');
+      }
+    } on DownloadFailed catch (e) {
+      if (!auto && mounted) _toast(e.message);
+    } catch (_) {
+      if (!auto && mounted) _toast('检查更新失败');
+    } finally {
+      _checkingUpdate = false;
+    }
+  }
+
+  void _toast(String text) {
+    _msgKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Text(text),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }

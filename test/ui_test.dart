@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:datavision/ble/link.dart';
 import 'package:datavision/core/prefs.dart';
+import 'package:datavision/core/updater.dart';
 import 'package:datavision/drivers/jk_bms.dart';
 import 'package:datavision/drivers/lingbo.dart';
 import 'package:datavision/drivers/registry.dart';
@@ -11,6 +12,7 @@ import 'package:datavision/ui/bms_page.dart';
 import 'package:datavision/ui/console_page.dart';
 import 'package:datavision/ui/controller_page.dart';
 import 'package:datavision/ui/settings_page.dart';
+import 'package:datavision/ui/update_dialog.dart';
 import 'package:datavision/ui/theme.dart';
 
 import 'protocol_test.dart' as frames;
@@ -98,10 +100,45 @@ void main() {
 
     await pumpAt(
       tester,
-      SettingsPage(prefs: prefs, ctrl: ctrl, bms: bms, version: '1.0.0'),
+      SettingsPage(
+          prefs: prefs, ctrl: ctrl, bms: bms, version: 'v1.0.4 (5)', onCheckUpdate: () {}),
       const Size(390, 844),
     );
     expect(tester.takeException(), isNull);
     expect(find.text('自动连接'), findsOneWidget);
+  });
+
+  testWidgets('更新弹窗在小屏上不溢出', (tester) async {
+    // 把窗口压到 360x640，模拟还没适配大屏的老机型
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light(),
+      home: Scaffold(
+        body: UpdateDialog(
+          info: const UpdateInfo(
+            tag: 'v1.0.5',
+            version: '1.0.5',
+            notes: '1. 安卓端支持 App 内直接下载更新，覆盖安装不用卸载\n'
+                '2. 修了回到前台后扫描不恢复的问题\n'
+                '3. 极空保护板温度偏移取错一位',
+            apkUrl: 'https://example.com/a.apk',
+            ipaUrl: 'https://example.com/a.ipa',
+            apkSize: 51235328,
+            ipaSize: 6942996,
+            pageUrl: 'https://example.com/releases',
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('发现新版本 v1.0.5'), findsOneWidget);
+    // 测试跑在桌面端，Platform.isAndroid 为 false，走的是 iOS 文案分支
+    expect(find.textContaining('下载 IPA'), findsOneWidget);
+    expect(find.text('稍后'), findsOneWidget);
   });
 }

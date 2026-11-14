@@ -33,7 +33,9 @@ lib/
   drivers/vesc.dart    VESC
   drivers/ant_bms.dart 蚂蚁保护板
   drivers/jk_bms.dart  极空保护板
-  ui/                  控制器页 / 保护板页 / 数据台 / 设置
+  core/updater.dart    在线更新：查 GitHub release / 比版本 / 下 APK（带镜像回退）
+  core/native.dart     原生通道封装（只有 Android 实现了装 APK）
+  ui/                  控制器页 / 保护板页 / 数据台 / 设置 / 更新弹窗
 tools/make_icon.py     图标生成（改设计只改这里）
 tools/push_repo.py     代理环境下用 REST API 推仓库
 ```
@@ -70,6 +72,35 @@ iOS 包只能在 macOS 上出，推送到 GitHub 后由 Actions 自动完成：
 iOS 包为 ad-hoc 签名，越狱设备用 TrollStore / AppSync / Sideloadly 安装。
 
 APK 用仓库内固定 keystore 签名（`android/app/datavision.jks`），后续版本可直接覆盖安装。
+
+## 在线更新
+
+更新源不是自建服务器，是仓库自己的 GitHub Releases —— 仓库公开，接口和资产都免费。
+`core/updater.dart` 走 `GET /repos/Corpse-zhao/DataVision/releases/latest`，拿 `tag_name` 和本地版本按数字段比，
+比本地新才提示；`releases/latest` 天然只指向最新一条，旧版本不会误报。
+
+两端能力不一样，这是系统决定的，不是实现取舍：
+
+| | Android | iOS |
+|---|---|---|
+| 检查更新 | 启动 / 回前台自动查（6 小时节流） | 同左 |
+| 下载 | App 内直接下 APK，带进度条 | 跳到 Safari 下 IPA |
+| 安装 | 交给系统安装器覆盖安装 | 必须用全能签重签后手动装 |
+
+Android 侧要点：
+
+- `REQUEST_INSTALL_PACKAGES` 权限 + `FileProvider`（authority `com.corpsezhao.datavision.fileprovider`），
+  APK 落在 `getExternalFilesDir()/update/`，`file_paths.xml` 里只开这一个目录和 cache。
+- 用户还没允许「安装未知应用」时，`installApk` 返回 `need_permission` 并直接把设置页拉起来，
+  授权后回来再点一次即可，包不会重下。
+- 覆盖安装的前提是新包用**同一个 keystore** 签（`android/app/datavision.jks`）。签名变了系统会拒绝覆盖，
+  只能卸载重装，本地记住的设备和信道会丢。
+- 国内直连 `objects.githubusercontent.com` 常断，下载按「原始地址 → ghfast.top → ghproxy.net」顺序试，
+  前一个失败自动换下一个。
+
+iOS 侧为什么不能自动更新：IPA 的签名绑死了 bundle id、证书和设备列表，装新版本必须重新签名，
+系统也没有给 App 提供「安装另一个 App」的接口。自签证书还没有 APNs 权限，所以连推送提醒都发不出去，
+只能靠 App 打开时自己查。想真·一键更新得走 App Store 或 TestFlight（$99/年）。
 
 ## 已知边界
 
