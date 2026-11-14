@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import 'ble/link.dart';
+import 'ble/scanner.dart';
 import 'core/prefs.dart';
 import 'drivers/registry.dart';
 import 'ui/bms_page.dart';
@@ -59,6 +60,8 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
       // 从后台回来：扫描早被系统停了，直接把两条链路都叫起来
       if (!ctrl.connected) ctrl.startScan(auto: true);
       if (!bms.connected) bms.startScan(auto: true);
+      // 后台待久了系统早把扫描停了，回来立刻补一次，不用等下一个窗口
+      ScanBus.instance.restart();
     }
   }
 

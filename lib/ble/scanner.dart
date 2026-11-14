@@ -16,6 +16,7 @@ class ScanBus {
   StreamSubscription? _sub;
   Timer? _kicker;
   bool _starting = false;
+  DateTime? _lastStart;
 
   Stream<List<ScanResult>> get stream => _controller.stream;
 
@@ -27,7 +28,9 @@ class ScanBus {
       },
       onError: (_) {},
     );
-    _kicker ??= Timer.periodic(const Duration(seconds: 7), (_) => _kick());
+    // 20 秒一个窗口：Android 对 startScan 有「30 秒内最多 5 次」的限流，
+    // 原来 7 秒一次正好踩在上限，个别机型会直接返回空列表（表现为「搜不到设备」）。
+    _kicker ??= Timer.periodic(const Duration(seconds: 20), (_) => _kick());
     await _kick();
   }
 
@@ -42,13 +45,26 @@ class ScanBus {
     }
   }
 
+  /// 从后台回来时立刻重扫一次（不等下一个 20 秒窗口）。
+  /// 4 秒内不重复，避免反复 stop/start 触发限流。
+  Future<void> restart() async {
+    if (_refs.isEmpty || _starting) return;
+    final last = _lastStart;
+    if (last != null && DateTime.now().difference(last).inSeconds < 4) return;
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    await _kick();
+  }
+
   Future<void> _kick() async {
     if (_starting) return;
     if (FlutterBluePlus.isScanningNow) return;
     _starting = true;
+    _lastStart = DateTime.now();
     try {
       await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: 6),
+        timeout: const Duration(seconds: 20),
         continuousUpdates: true,
         androidUsesFineLocation: false,
       );
