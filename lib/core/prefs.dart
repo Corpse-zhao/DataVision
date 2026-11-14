@@ -18,6 +18,7 @@ class Prefs {
   static const _kPolePairs = 'fardriver_pole_pairs';
   static const _kPollMs = 'poll_ms';
   static const _kShowAll = 'show_all';
+  static const _kKeepAwake = 'keep_awake';
   static const _kUpdateCheck = 'update_check_at';
 
   late SharedPreferences _sp;
@@ -56,6 +57,10 @@ class Prefs {
 
   bool get showAll => _sp.getBool(_kShowAll) ?? false;
   set showAll(bool v) => _sp.setBool(_kShowAll, v);
+
+  /// 屏幕常亮。默认关：常亮更费电，需要盯着看的时候自己开
+  bool get keepAwake => _sp.getBool(_kKeepAwake) ?? false;
+  set keepAwake(bool v) => _sp.setBool(_kKeepAwake, v);
 
   int get polePairs {
     final v = _sp.getInt(_kPolePairs) ?? 20;

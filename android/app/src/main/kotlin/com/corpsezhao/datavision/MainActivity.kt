@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -11,7 +12,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 /**
- * 原生层只干两件事：把下载好的 APK 交给系统安装器、开外部链接。
+ * 原生层干三件事：把下载好的 APK 交给系统安装器、开外部链接、屏幕常亮。
  *
  * 下载放 Dart 里做（能拿进度），安装必须过原生：Android 8.0 之后要用 FileProvider
  * 给系统一个 content:// URI，而且用户得先允许「安装未知应用」——没允许时这里直接把设置页拉起来。
@@ -55,6 +56,19 @@ class MainActivity : FlutterActivity() {
                                 result.error("no_browser", e.message, null)
                             }
                         }
+                    }
+
+                    // 屏幕常亮：只挂在本 Activity 的窗口上，退出 App 自动失效
+                    "setKeepAwake" -> {
+                        val on = call.argument<Boolean>("on") ?: false
+                        runOnUiThread {
+                            if (on) {
+                                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            } else {
+                                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            }
+                        }
+                        result.success(true)
                     }
 
                     else -> result.notImplemented()

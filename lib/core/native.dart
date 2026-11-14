@@ -62,6 +62,29 @@ class Native {
       return false;
     }
   }
+
+  /// 屏幕常亮开关。两端都实现了：
+  ///   Android —— WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+  ///   iOS     —— UIApplication.shared.isIdleTimerDisabled
+  /// 只作用于本 App 的前台窗口，退到后台或杀掉进程就自动恢复正常熄屏。
+  static Future<bool> setKeepAwake(bool on) async {
+    if (!_isMobile) return false;
+    try {
+      return await _ch.invokeMethod<bool>('setKeepAwake', {'on': on}) ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+}
+
+bool get _isMobile {
+  try {
+    return Platform.isAndroid || Platform.isIOS;
+  } catch (_) {
+    return false;
+  }
 }
 
 bool get _isAndroid {

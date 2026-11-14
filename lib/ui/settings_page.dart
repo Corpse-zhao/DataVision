@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../ble/link.dart';
+import '../core/native.dart';
 import '../core/prefs.dart';
 import '../core/updater.dart';
 import 'theme.dart';
@@ -81,6 +82,45 @@ class _SettingsPageState extends State<SettingsPage> {
                 await widget.bms.disconnect(forget: true);
                 setState(() {});
               }),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        SectionCard(
+          title: '显示',
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('不息屏', style: TextStyle(fontSize: 14)),
+                    SizedBox(height: 2),
+                    Text(
+                      '盯着看数据时不让屏幕自己黑掉。只在本 App 前台生效，退出或切后台就恢复系统熄屏；一直常亮会更费电。',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: p.keepAwake,
+                onChanged: (v) async {
+                  // 先把 messenger 抓住：await 之后 context 可能已经失效
+                  final messenger = ScaffoldMessenger.of(context);
+                  setState(() => p.keepAwake = v);
+                  final ok = await Native.setKeepAwake(v);
+                  if (v && !ok) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('这台设备上没能开启常亮'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+              ),
             ],
           ),
         ),

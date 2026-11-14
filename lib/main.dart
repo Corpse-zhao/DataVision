@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'ble/link.dart';
 import 'ble/scanner.dart';
+import 'core/native.dart';
 import 'core/prefs.dart';
 import 'core/updater.dart';
 import 'drivers/registry.dart';
@@ -54,6 +55,8 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
     bms.addListener(_refresh);
     ctrl.init();
     bms.init();
+    // 上次开的常亮，这次启动接着生效（默认关，不会平白多耗电）
+    Native.setKeepAwake(widget.prefs.keepAwake);
     // 首帧之后再查，别和蓝牙初始化抢启动时间
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdate(auto: true));
   }
@@ -70,6 +73,8 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
       if (!bms.connected) bms.startScan(auto: true);
       // 后台待久了系统早把扫描停了，回来立刻补一次，不用等下一个窗口
       ScanBus.instance.restart();
+      // 回前台重新挂一次常亮标记：切后台期间系统会把窗口标志清掉
+      Native.setKeepAwake(widget.prefs.keepAwake);
       // 更新检查跟着前台节奏走，内部有 6 小时节流，不会每次都打接口
       _checkUpdate(auto: true);
     }

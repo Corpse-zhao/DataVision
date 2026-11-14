@@ -155,6 +155,33 @@ void main() {
     expect(find.text('检测到新版本'), findsNothing);
   });
 
+  testWidgets('设置页有不息屏开关，打开后记进本地', (tester) async {
+    await pumpAt(
+      tester,
+      SettingsPage(
+          prefs: prefs,
+          ctrl: ctrl,
+          bms: bms,
+          version: 'v1.0.8',
+          onCheckUpdate: () {},
+          onOpenDownloadPage: () {},
+          onOpenUpdate: () {}),
+      // 画布拉高：「显示」这一节在列表中部，默认 640 高会构建不到
+      const Size(390, 1400),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('不息屏'), findsOneWidget);
+    // 默认关
+    expect(prefs.keepAwake, isFalse);
+
+    // 第 2 个 Switch 才是「不息屏」（第 1 个是自动连接）
+    await tester.tap(find.byType(Switch).at(1));
+    await tester.pump();
+
+    expect(prefs.keepAwake, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('查到新版本时版本号旁边出现提示', (tester) async {
     feedController();
     await pumpAt(
