@@ -51,7 +51,7 @@ def collect(root):
                 continue
             full = os.path.join(dirpath, fn)
             rel = os.path.relpath(full, root).replace("\\", "/")
-            if rel.startswith("research/"):
+            if rel.startswith(("research/", "test/preview/shots/")):
                 continue
             out.append((rel, full))
     return out

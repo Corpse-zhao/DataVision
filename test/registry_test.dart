@@ -59,12 +59,21 @@ void main() {
   group('假在线判定按协议给够时间', () {
     test('蚂蚁板 152 字节分多包，阈值要比默认宽', () {
       final ant = AntBmsDriver();
-      expect(ant.staleTimeoutSeconds, greaterThan(DeviceDriver.defaultStaleSeconds));
+      expect(
+        ant.staleTimeoutSeconds,
+        greaterThan(DeviceDriver.defaultStaleSeconds),
+      );
     });
 
     test('控制器保持默认，掉线要能马上重连', () {
-      expect(LingboDriver().staleTimeoutSeconds, DeviceDriver.defaultStaleSeconds);
-      expect(VescDriver().staleTimeoutSeconds, DeviceDriver.defaultStaleSeconds);
+      expect(
+        LingboDriver().staleTimeoutSeconds,
+        DeviceDriver.defaultStaleSeconds,
+      );
+      expect(
+        VescDriver().staleTimeoutSeconds,
+        DeviceDriver.defaultStaleSeconds,
+      );
     });
   });
 }

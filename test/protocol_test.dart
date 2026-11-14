@@ -90,10 +90,61 @@ int _fardriverCrc(List<int> f) {
 /// 远驱 16 字节帧：id 查表得地址，这里按地址反查一个可用 id
 List<int> fardriverFrame(int address, void Function(List<int> data) fill) {
   const table = <int>[
-    0xE2, 0xE8, 0xEE, 0xE4, 0x06, 0x0C, 0x12, 0xE2, 0xE8, 0xEE, 0x18, 0x1E, 0x24, 0x2A,
-    0xE2, 0xE8, 0xEE, 0x30, 0x5D, 0x63, 0x69, 0xE2, 0xE8, 0xEE, 0x7C, 0x82, 0x88, 0x8E,
-    0xE2, 0xE8, 0xEE, 0x94, 0x9A, 0xA0, 0xA6, 0xE2, 0xE8, 0xEE, 0xAC, 0xB2, 0xB8, 0xBE,
-    0xE2, 0xE8, 0xEE, 0xC4, 0xCA, 0xD0, 0xE2, 0xE8, 0xEE, 0xD6, 0xDC, 0xF4, 0xFA,
+    0xE2,
+    0xE8,
+    0xEE,
+    0xE4,
+    0x06,
+    0x0C,
+    0x12,
+    0xE2,
+    0xE8,
+    0xEE,
+    0x18,
+    0x1E,
+    0x24,
+    0x2A,
+    0xE2,
+    0xE8,
+    0xEE,
+    0x30,
+    0x5D,
+    0x63,
+    0x69,
+    0xE2,
+    0xE8,
+    0xEE,
+    0x7C,
+    0x82,
+    0x88,
+    0x8E,
+    0xE2,
+    0xE8,
+    0xEE,
+    0x94,
+    0x9A,
+    0xA0,
+    0xA6,
+    0xE2,
+    0xE8,
+    0xEE,
+    0xAC,
+    0xB2,
+    0xB8,
+    0xBE,
+    0xE2,
+    0xE8,
+    0xEE,
+    0xC4,
+    0xCA,
+    0xD0,
+    0xE2,
+    0xE8,
+    0xEE,
+    0xD6,
+    0xDC,
+    0xF4,
+    0xFA,
   ];
   final id = table.indexOf(address);
   final f = List<int>.filled(16, 0);
@@ -285,7 +336,10 @@ void main() {
     test('标定帧拿到分母后，实时帧换算正确', () {
       final d = LingboDriver();
       expect(d.feed(lingboCalibration(divI: 63, divV: 63)), isFalse);
-      expect(d.feed(lingboRealtime(rawVolts: 3800, rawAmps: 1260, rpm: 1200)), isTrue);
+      expect(
+        d.feed(lingboRealtime(rawVolts: 3800, rawAmps: 1260, rpm: 1200)),
+        isTrue,
+      );
 
       final data = d.controllerData!;
       // 3800 / 63 = 60.3V ；1260 / 63 = 20A
@@ -332,22 +386,29 @@ void main() {
 
     test('转速按极对数换算 + 温度/SOC', () {
       final d = FardriverDriver()..polePairs = 20;
-      d.feed(fardriverFrame(0xE2, (data) {
-        data[0] = 2 << 2; // 挡位 3
-        _putS16le(data, 6, 5000); // 电机 5000rpm
-      }));
+      d.feed(
+        fardriverFrame(0xE2, (data) {
+          data[0] = 2 << 2; // 挡位 3
+          _putS16le(data, 6, 5000); // 电机 5000rpm
+        }),
+      );
       d.feed(fardriverFrame(0xD6, (data) => _putS16le(data, 10, 55)));
-      d.feed(fardriverFrame(0xF4, (data) {
-        _putS16le(data, 0, 62);
-        data[3] = 77;
-      }));
+      d.feed(
+        fardriverFrame(0xF4, (data) {
+          _putS16le(data, 0, 62);
+          data[3] = 77;
+        }),
+      );
 
       final data = d.controllerData!;
       // 5000 * 4 / 20 = 1000
       expect(data.primary[3].value, '1000');
       expect(data.secondary.firstWhere((m) => m.label == '控制器温度').value, '55');
       expect(data.secondary.firstWhere((m) => m.label == '电机温度').value, '62');
-      expect(data.secondary.firstWhere((m) => m.label == '电量(SOC)').value, '77');
+      expect(
+        data.secondary.firstWhere((m) => m.label == '电量(SOC)').value,
+        '77',
+      );
       expect(data.secondary.firstWhere((m) => m.label == '挡位').value, '3');
     });
 

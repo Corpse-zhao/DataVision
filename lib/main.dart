@@ -22,6 +22,8 @@ Future<void> main() async {
   ]);
   final prefs = Prefs();
   await prefs.load();
+  // 主题要在第一帧之前定下来，免得开机闪一下浅色再变深色
+  AppThemeManager.instance.restore(prefs.themeId);
   await Updater.instance.init();
   runApp(DataVisionApp(prefs: prefs));
 }
@@ -34,7 +36,8 @@ class DataVisionApp extends StatefulWidget {
   State<DataVisionApp> createState() => _DataVisionAppState();
 }
 
-class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserver {
+class _DataVisionAppState extends State<DataVisionApp>
+    with WidgetsBindingObserver {
   late final BleLink ctrl;
   late final BleLink bms;
   final _navKey = GlobalKey<NavigatorState>();
@@ -49,7 +52,11 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    ctrl = BleLink(role: 'controller', pool: controllerDrivers(), prefs: widget.prefs);
+    ctrl = BleLink(
+      role: 'controller',
+      pool: controllerDrivers(),
+      prefs: widget.prefs,
+    );
     bms = BleLink(role: 'bms', pool: bmsDrivers(), prefs: widget.prefs);
     ctrl.addListener(_refresh);
     bms.addListener(_refresh);
@@ -60,7 +67,9 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
     // 上次开的常亮，这次启动接着生效（默认关，不会平白多耗电）
     Native.setKeepAwake(widget.prefs.keepAwake);
     // 首帧之后再查，别和蓝牙初始化抢启动时间
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdate(auto: true));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkUpdate(auto: true),
+    );
   }
 
   void _refresh() {
@@ -110,57 +119,89 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
     final size = MediaQuery.sizeOf(context);
     final wide = size.width > size.height;
 
-    return MaterialApp(
-      title: '数据视界',
-      navigatorKey: _navKey,
-      scaffoldMessengerKey: _msgKey,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      home: Scaffold(
-        appBar: AppBar(
-          backgroundColor: AppColors.bg,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          titleSpacing: 16,
-          title: Row(
-            children: [
-              const Text('数据视界',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: .5)),
-              const SizedBox(width: 10),
-              _dot(ctrl.phase == LinkPhase.online, '控'),
-              const SizedBox(width: 6),
-              _dot(bms.phase == LinkPhase.online, '板'),
-            ],
-          ),
-          // 横屏时底部导航条太占地方，标签收进顶栏右上角
-          actions: wide
-              ? [_PlateTabs(index: _index, onTap: (i) => setState(() => _index = i)), const SizedBox(width: 12)]
-              : null,
-        ),
-        body: IndexedStack(index: _index, children: pages),
-        bottomNavigationBar: wide
-            ? null
-            : NavigationBar(
-                height: 58,
-                backgroundColor: Colors.white,
-                indicatorColor: AppColors.accent.withValues(alpha: .10),
-                selectedIndex: _index,
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                onDestinationSelected: (i) => setState(() => _index = i),
-                destinations: const [
-                  NavigationDestination(
-                      icon: Icon(Icons.speed_outlined), selectedIcon: Icon(Icons.speed), label: '数据'),
-                  NavigationDestination(
-                      icon: Icon(Icons.terminal_outlined),
-                      selectedIcon: Icon(Icons.terminal),
-                      label: '数据台'),
-                  NavigationDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      selectedIcon: Icon(Icons.settings),
-                      label: '设置'),
-                ],
+    return AnimatedBuilder(
+      animation: AppThemeManager.instance,
+      builder: (context, _) {
+        final pal = AppThemeManager.instance.palette;
+        return MaterialApp(
+          title: '数据视界',
+          navigatorKey: _navKey,
+          scaffoldMessengerKey: _msgKey,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.of(pal),
+          home: AnnotatedRegion<SystemUiOverlayStyle>(
+            // 深色主题下状态栏图标要转成白字，否则在纯黑底上看不见
+            value: pal.brightness == Brightness.dark
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark,
+            child: Scaffold(
+              appBar: AppBar(
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                titleSpacing: 16,
+                title: Row(
+                  children: [
+                    Text(
+                      '数据视界',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .5,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _dot(ctrl.phase == LinkPhase.online, '控'),
+                    const SizedBox(width: 6),
+                    _dot(bms.phase == LinkPhase.online, '板'),
+                  ],
+                ),
+                // 横屏时底部导航条太占地方，标签收进顶栏右上角
+                actions: wide
+                    ? [
+                        _PlateTabs(
+                          index: _index,
+                          onTap: (i) => setState(() => _index = i),
+                        ),
+                        const SizedBox(width: 12),
+                      ]
+                    : null,
               ),
-      ),
+              body: ThemeBackdrop(
+                child: IndexedStack(index: _index, children: pages),
+              ),
+              bottomNavigationBar: wide
+                  ? null
+                  : NavigationBar(
+                      height: 58,
+                      backgroundColor: AppColors.card,
+                      indicatorColor: AppColors.accent.withValues(alpha: .10),
+                      selectedIndex: _index,
+                      labelBehavior:
+                          NavigationDestinationLabelBehavior.alwaysShow,
+                      onDestinationSelected: (i) => setState(() => _index = i),
+                      destinations: [
+                        const NavigationDestination(
+                          icon: Icon(Icons.speed_outlined),
+                          selectedIcon: Icon(Icons.speed),
+                          label: '数据',
+                        ),
+                        const NavigationDestination(
+                          icon: Icon(Icons.terminal_outlined),
+                          selectedIcon: Icon(Icons.terminal),
+                          label: '数据台',
+                        ),
+                        const NavigationDestination(
+                          icon: Icon(Icons.settings_outlined),
+                          selectedIcon: Icon(Icons.settings),
+                          label: '设置',
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -230,7 +271,9 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: on ? AppColors.good.withValues(alpha: .12) : AppColors.line.withValues(alpha: .6),
+        color: on
+            ? AppColors.good.withValues(alpha: .12)
+            : AppColors.line.withValues(alpha: .6),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -239,17 +282,21 @@ class _DataVisionAppState extends State<DataVisionApp> with WidgetsBindingObserv
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: on ? AppColors.good : AppColors.inkSoft.withValues(alpha: .4),
+              color: on
+                  ? AppColors.good
+                  : AppColors.inkSoft.withValues(alpha: .4),
               shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                fontSize: 10,
-                color: on ? AppColors.good : AppColors.inkSoft,
-                fontWeight: FontWeight.w600,
-              )),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: on ? AppColors.good : AppColors.inkSoft,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -275,9 +322,14 @@ class _PlateTabs extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               onTap: () => onTap(i),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
-                  color: i == index ? AppColors.accent.withValues(alpha: .10) : null,
+                  color: i == index
+                      ? AppColors.accent.withValues(alpha: .10)
+                      : null,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(

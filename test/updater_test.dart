@@ -46,7 +46,8 @@ void main() {
 
   group('下载地址', () {
     test('原始地址在最前，镜像跟在后面', () {
-      const raw = 'https://github.com/Corpse-zhao/DataVision/releases/download/v1.0.5/DataVision-v1.0.5.apk';
+      const raw =
+          'https://github.com/Corpse-zhao/DataVision/releases/download/v1.0.5/DataVision-v1.0.5.apk';
       final urls = Updater.candidateUrls(raw);
       expect(urls.first, raw);
       expect(urls.length, greaterThanOrEqualTo(2));
@@ -67,27 +68,31 @@ void main() {
   });
 
   group('发布列表解析（踩过的坑：预发布版本被漏掉）', () {
-    Map<String, dynamic> release(String tag, {bool draft = false, bool pre = false}) => {
-          'tag_name': tag,
-          'draft': draft,
-          'prerelease': pre,
-          'body': '$tag 的说明',
-          'html_url': 'https://github.com/Corpse-zhao/DataVision/releases/tag/$tag',
-          'assets': [
-            {
-              'name': 'DataVision-$tag.apk',
-              'browser_download_url':
-                  'https://github.com/Corpse-zhao/DataVision/releases/download/$tag/DataVision-$tag.apk',
-              'size': 51235328,
-            },
-            {
-              'name': 'DataVision-$tag.ipa',
-              'browser_download_url':
-                  'https://github.com/Corpse-zhao/DataVision/releases/download/$tag/DataVision-$tag.ipa',
-              'size': 6942996,
-            },
-          ],
-        };
+    Map<String, dynamic> release(
+      String tag, {
+      bool draft = false,
+      bool pre = false,
+    }) => {
+      'tag_name': tag,
+      'draft': draft,
+      'prerelease': pre,
+      'body': '$tag 的说明',
+      'html_url': 'https://github.com/Corpse-zhao/DataVision/releases/tag/$tag',
+      'assets': [
+        {
+          'name': 'DataVision-$tag.apk',
+          'browser_download_url':
+              'https://github.com/Corpse-zhao/DataVision/releases/download/$tag/DataVision-$tag.apk',
+          'size': 51235328,
+        },
+        {
+          'name': 'DataVision-$tag.ipa',
+          'browser_download_url':
+              'https://github.com/Corpse-zhao/DataVision/releases/download/$tag/DataVision-$tag.ipa',
+          'size': 6942996,
+        },
+      ],
+    };
 
     test('标了 prerelease 的版本也必须算（就是这次 404 的根因）', () {
       final info = Updater.pickNewestRelease([
@@ -121,8 +126,10 @@ void main() {
       final info = Updater.pickNewestRelease([
         {'tag_name': 'v2.0.0', 'draft': false, 'assets': <dynamic>[]},
       ]);
-      expect(info!.apkUrl,
-          'https://github.com/Corpse-zhao/DataVision/releases/download/v2.0.0/DataVision-v2.0.0.apk');
+      expect(
+        info!.apkUrl,
+        'https://github.com/Corpse-zhao/DataVision/releases/download/v2.0.0/DataVision-v2.0.0.apk',
+      );
     });
   });
 
@@ -155,8 +162,9 @@ void main() {
       final ver = line.split(':').last.split('+').first.trim();
       expect(ver, isNotEmpty, reason: 'pubspec 里读不到 version');
 
-      final json =
-          jsonDecode(File('version.json').readAsStringSync()) as Map<String, dynamic>;
+      final json = jsonDecode(
+        File('version.json').readAsStringSync(),
+      ) as Map<String, dynamic>;
       expect(json['version'], ver);
       expect(json['tag'], 'v$ver');
     });

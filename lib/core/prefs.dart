@@ -19,6 +19,7 @@ class Prefs {
   static const _kPollMs = 'poll_ms';
   static const _kShowAll = 'show_all';
   static const _kKeepAwake = 'keep_awake';
+  static const _kTheme = 'theme_id';
   static const _kUpdateCheck = 'update_check_at';
 
   late SharedPreferences _sp;
@@ -27,8 +28,10 @@ class Prefs {
     _sp = await SharedPreferences.getInstance();
   }
 
-  String? deviceId(String role) => _sp.getString(role == 'controller' ? _kCtrlId : _kBmsId);
-  String? deviceName(String role) => _sp.getString(role == 'controller' ? _kCtrlName : _kBmsName);
+  String? deviceId(String role) =>
+      _sp.getString(role == 'controller' ? _kCtrlId : _kBmsId);
+  String? deviceName(String role) =>
+      _sp.getString(role == 'controller' ? _kCtrlName : _kBmsName);
 
   Future<void> saveDevice(String role, String id, String name) async {
     await _sp.setString(role == 'controller' ? _kCtrlId : _kBmsId, id);
@@ -42,13 +45,17 @@ class Prefs {
   }
 
   /// 上次跑通的写入信道（特征 UUID 短名）
-  String? channel(String role) => _sp.getString(role == 'controller' ? _kCtrlChannel : _kBmsChannel);
+  String? channel(String role) =>
+      _sp.getString(role == 'controller' ? _kCtrlChannel : _kBmsChannel);
 
   Future<void> saveChannel(String role, String? key) async {
     if (key == null) {
       await _sp.remove(role == 'controller' ? _kCtrlChannel : _kBmsChannel);
     } else {
-      await _sp.setString(role == 'controller' ? _kCtrlChannel : _kBmsChannel, key);
+      await _sp.setString(
+        role == 'controller' ? _kCtrlChannel : _kBmsChannel,
+        key,
+      );
     }
   }
 
@@ -61,6 +68,10 @@ class Prefs {
   /// 屏幕常亮。默认关：常亮更费电，需要盯着看的时候自己开
   bool get keepAwake => _sp.getBool(_kKeepAwake) ?? false;
   set keepAwake(bool v) => _sp.setBool(_kKeepAwake, v);
+
+  /// 界面主题 id（见 AppPalettes）。没存过就用浅色经典
+  String get themeId => _sp.getString(_kTheme) ?? 'classic';
+  set themeId(String v) => _sp.setString(_kTheme, v);
 
   int get polePairs {
     final v = _sp.getInt(_kPolePairs) ?? 20;
@@ -91,10 +102,10 @@ class Prefs {
   }
 
   Map<String, dynamic> debugDump() => {
-        'ctrl': deviceName('controller'),
-        'bms': deviceName('bms'),
-        'auto': autoConnect,
-      };
+    'ctrl': deviceName('controller'),
+    'bms': deviceName('bms'),
+    'auto': autoConnect,
+  };
 
   String encode(List<int> bytes) => base64Encode(bytes);
 }

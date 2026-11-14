@@ -37,11 +37,14 @@ class _ConsolePageState extends State<ConsolePage> {
                       ButtonSegment(value: true, label: Text('保护板')),
                     ],
                     selected: {_bmsTab},
-                    onSelectionChanged: (s) => setState(() => _bmsTab = s.first),
+                    onSelectionChanged: (s) =>
+                        setState(() => _bmsTab = s.first),
                     showSelectedIcon: false,
                     style: ButtonStyle(
                       visualDensity: VisualDensity.compact,
-                      textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 13)),
+                      textStyle: WidgetStateProperty.all(
+                        const TextStyle(fontSize: 13),
+                      ),
                     ),
                   ),
                 ),
@@ -73,10 +76,16 @@ class _ConsolePageState extends State<ConsolePage> {
                 child: const Text('清空', style: TextStyle(fontSize: 12)),
               ),
               child: link.logs.isEmpty
-                  ? const Padding(
+                  ? Padding(
                       padding: EdgeInsets.symmetric(vertical: 18),
                       child: Center(
-                        child: Text('还没有数据', style: TextStyle(color: AppColors.inkSoft, fontSize: 12.5)),
+                        child: Text(
+                          '还没有数据',
+                          style: TextStyle(
+                            color: AppColors.inkSoft,
+                            fontSize: 12.5,
+                          ),
+                        ),
                       ),
                     )
                   : Column(
@@ -92,19 +101,25 @@ class _ConsolePageState extends State<ConsolePage> {
                                   '${l.at.minute.toString().padLeft(2, '0')}:'
                                   '${l.at.second.toString().padLeft(2, '0')}',
                                   style: AppTheme.mono.copyWith(
-                                      fontSize: 10.5, color: AppColors.inkSoft),
+                                    fontSize: 10.5,
+                                    color: AppColors.inkSoft,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 SizedBox(
                                   width: 12,
-                                  child: Text(l.tag,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: l.tag == '→'
-                                            ? AppColors.accent
-                                            : (l.tag == '←' ? AppColors.good : AppColors.inkSoft),
-                                      )),
+                                  child: Text(
+                                    l.tag,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: l.tag == '→'
+                                          ? AppColors.accent
+                                          : (l.tag == '←'
+                                                ? AppColors.good
+                                                : AppColors.inkSoft),
+                                    ),
+                                  ),
                                 ),
                                 Expanded(
                                   child: Text(
@@ -136,7 +151,10 @@ class _ConsolePageState extends State<ConsolePage> {
         children: [
           SizedBox(
             width: 62,
-            child: Text(k, style: const TextStyle(fontSize: 12.5, color: AppColors.inkSoft)),
+            child: Text(
+              k,
+              style: TextStyle(fontSize: 12.5, color: AppColors.inkSoft),
+            ),
           ),
           Expanded(
             child: Text(

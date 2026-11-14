@@ -57,18 +57,29 @@ class _UpdateDialogState extends State<UpdateDialog> {
               color: AppColors.accent.withValues(alpha: .10),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.arrow_circle_up_rounded, size: 20, color: AppColors.accent),
+            child: Icon(
+              Icons.arrow_circle_up_rounded,
+              size: 20,
+              color: AppColors.accent,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('发现新版本 v$_ver',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(
+                  '发现新版本 v$_ver',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('当前 ${Updater.instance.displayVersion}',
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft)),
+                Text(
+                  '当前 ${Updater.instance.displayVersion}',
+                  style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+                ),
               ],
             ),
           ),
@@ -91,15 +102,21 @@ class _UpdateDialogState extends State<UpdateDialog> {
                 child: SingleChildScrollView(
                   child: Text(
                     info.notes.trim(),
-                    style: const TextStyle(fontSize: 12, height: 1.55, color: AppColors.ink),
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.55,
+                      color: AppColors.ink,
+                    ),
                   ),
                 ),
               )
             else
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('（这一版没写更新说明）',
-                    style: TextStyle(fontSize: 12, color: AppColors.inkSoft)),
+                child: Text(
+                  '（这一版没写更新说明）',
+                  style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+                ),
               ),
             const SizedBox(height: 12),
             if (_busy) _progressBlock() else _actionBlock(),
@@ -130,9 +147,11 @@ class _UpdateDialogState extends State<UpdateDialog> {
               foregroundColor: Colors.white,
             ),
             onPressed: _android ? _downloadAndInstall : _openForIos,
-            child: Text(_android
-                ? '立即更新${info.apkSize > 0 ? '（${humanSize(info.apkSize)}）' : ''}'
-                : '下载 IPA${info.ipaSize > 0 ? '（${humanSize(info.ipaSize)}）' : ''}'),
+            child: Text(
+              _android
+                  ? '立即更新${info.apkSize > 0 ? '（${humanSize(info.apkSize)}）' : ''}'
+                  : '下载 IPA${info.ipaSize > 0 ? '（${humanSize(info.ipaSize)}）' : ''}',
+            ),
           ),
       ],
     );
@@ -146,7 +165,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
           _android
               ? '下载完成后会直接弹出系统安装界面，覆盖安装即可，已记住的设备和设置不会丢。'
               : 'iOS 系统不允许 App 自己装 App。点下面按钮把 IPA 下到「文件」里，再用全能签重新签名安装'
-                  '——Bundle ID 保持和上次一致，覆盖安装后数据在。',
+                    '——Bundle ID 保持和上次一致，覆盖安装后数据在。',
           AppColors.inkSoft,
         ),
         if (!_android) ...[
@@ -154,12 +173,18 @@ class _UpdateDialogState extends State<UpdateDialog> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 30)),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 30),
+              ),
               onPressed: () async {
                 await _launch(widget.info.pageUrl);
                 if (mounted) Navigator.of(context).pop('opened');
               },
-              child: const Text('打开版本页（看说明 / 手动选包）', style: TextStyle(fontSize: 12)),
+              child: const Text(
+                '打开版本页（看说明 / 手动选包）',
+                style: TextStyle(fontSize: 12),
+              ),
             ),
           ),
         ],
@@ -178,22 +203,27 @@ class _UpdateDialogState extends State<UpdateDialog> {
             value: f,
             minHeight: 7,
             backgroundColor: AppColors.line,
-            valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+            valueColor: AlwaysStoppedAnimation(AppColors.accent),
           ),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
             Text(
-              f == null ? '正在下载…' : '正在下载 ${(_fraction! * 100).toStringAsFixed(0)}%',
-              style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+              f == null
+                  ? '正在下载…'
+                  : '正在下载 ${(_fraction! * 100).toStringAsFixed(0)}%',
+              style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
             ),
             const Spacer(),
             Text(
               _total > 0
                   ? '${humanSize(_received)} / ${humanSize(_total)}'
                   : humanSize(_received),
-              style: AppTheme.mono.copyWith(fontSize: 11.5, color: AppColors.inkSoft),
+              style: AppTheme.mono.copyWith(
+                fontSize: 11.5,
+                color: AppColors.inkSoft,
+              ),
             ),
           ],
         ),
@@ -211,7 +241,10 @@ class _UpdateDialogState extends State<UpdateDialog> {
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(text, style: TextStyle(fontSize: 11.5, height: 1.5, color: color)),
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 11.5, height: 1.5, color: color),
+          ),
         ),
       ],
     );
@@ -305,7 +338,10 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
   Future<bool> _launch(String url) async {
     try {
-      return await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      return await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
     } catch (_) {
       return false;
     }

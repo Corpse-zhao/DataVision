@@ -38,23 +38,29 @@ class _DataPageState extends State<DataPage> {
         final ctrlCard = _ControllerCard(link: widget.ctrl, trend: _trend);
         final bmsCard = _BmsCard(link: widget.bms);
 
-        return LayoutBuilder(builder: (context, box) {
-          final wide = box.maxWidth > box.maxHeight;
-          return Padding(
-            padding: EdgeInsets.fromLTRB(12, 10, 12, wide ? 10 : 6),
-            child: wide
-                ? Row(children: [
-                    Expanded(flex: 10, child: ctrlCard),
-                    const SizedBox(width: 9),
-                    Expanded(flex: 11, child: bmsCard),
-                  ])
-                : Column(children: [
-                    Expanded(flex: 5, child: ctrlCard),
-                    const SizedBox(height: 9),
-                    Expanded(flex: 6, child: bmsCard),
-                  ]),
-          );
-        });
+        return LayoutBuilder(
+          builder: (context, box) {
+            final wide = box.maxWidth > box.maxHeight;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(12, 10, 12, wide ? 10 : 6),
+              child: wide
+                  ? Row(
+                      children: [
+                        Expanded(flex: 10, child: ctrlCard),
+                        const SizedBox(width: 9),
+                        Expanded(flex: 11, child: bmsCard),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        Expanded(flex: 5, child: ctrlCard),
+                        const SizedBox(height: 9),
+                        Expanded(flex: 6, child: bmsCard),
+                      ],
+                    ),
+            );
+          },
+        );
       },
     );
   }
@@ -83,9 +89,11 @@ class PowerTrend {
   List<double> get values => [for (final p in _pts) p.watts];
   bool get hasCurve => _pts.length >= 2;
 
-  double? get peak => _pts.isEmpty ? null : _pts.map((p) => p.watts).reduce(math.max);
-  double? get average =>
-      _pts.isEmpty ? null : _pts.map((p) => p.watts).reduce((a, b) => a + b) / _pts.length;
+  double? get peak =>
+      _pts.isEmpty ? null : _pts.map((p) => p.watts).reduce(math.max);
+  double? get average => _pts.isEmpty
+      ? null
+      : _pts.map((p) => p.watts).reduce((a, b) => a + b) / _pts.length;
 }
 
 class _TrendPoint {
@@ -166,57 +174,67 @@ class _CardFrame extends StatelessWidget {
         border: Border.all(color: AppColors.line),
       ),
       clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(builder: (context, box) {
-        final bodyH = math.max(
-          0.0,
-          box.maxHeight - _headH - 8 - (footer == null ? 0 : _footerH) - 16,
-        );
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(11, 9, 11, 0),
-              child: SizedBox(
-                height: _headH,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final bodyH = math.max(
+            0.0,
+            box.maxHeight - _headH - 8 - (footer == null ? 0 : _footerH) - 16,
+          );
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(11, 9, 11, 0),
+                child: SizedBox(
+                  height: _headH,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: dot,
+                          shape: BoxShape.circle,
+                        ),
                       ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.inkSoft,
+                          ),
+                        ),
+                      ),
+                      ?trailing,
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(11, 8, 11, 7),
+                  child: body(bodyH),
+                ),
+              ),
+              if (footer != null)
+                Container(
+                  height: _footerH,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: AppColors.line, width: .5),
                     ),
-                    ?trailing,
-                  ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  alignment: Alignment.center,
+                  child: footer,
                 ),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(11, 8, 11, 7),
-                child: body(bodyH),
-              ),
-            ),
-            if (footer != null)
-              Container(
-                height: _footerH,
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: AppColors.line, width: .5)),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 11),
-                alignment: Alignment.center,
-                child: footer,
-              ),
-          ],
-        );
-      }),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -227,19 +245,22 @@ class _Tile {
   final String label;
   final String value;
   final String unit;
-  final Color color;
+
+  /// null 表示跟随主题的字色（主题是运行时切的，不能写进 const 默认值）
+  final Color? color;
   final bool highlight;
   final bool small;
   const _Tile({
     required this.label,
     required this.value,
     required this.unit,
-    this.color = AppColors.ink,
+    this.color,
     this.highlight = false,
     this.small = false,
   });
 
-  factory _Tile.of(Metric m, {bool highlight = false, bool small = false}) => _Tile(
+  factory _Tile.of(Metric m, {bool highlight = false, bool small = false}) =>
+      _Tile(
         label: m.label,
         value: m.value,
         unit: m.unit,
@@ -259,15 +280,19 @@ class _MetricGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tiles.isEmpty) return const SizedBox.shrink();
-    return LayoutBuilder(builder: (context, box) {
-      const gap = 6.0;
-      final w = (box.maxWidth - gap * (cols - 1)) / cols;
-      return Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [for (final t in tiles) SizedBox(width: w, child: _TileBox(t))],
-      );
-    });
+    return LayoutBuilder(
+      builder: (context, box) {
+        const gap = 6.0;
+        final w = (box.maxWidth - gap * (cols - 1)) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final t in tiles) SizedBox(width: w, child: _TileBox(t)),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -278,10 +303,13 @@ class _TileBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labelColor = t.highlight ? AppColors.accent : AppColors.inkSoft;
+    final scale = AppColors.numberScale;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
       decoration: BoxDecoration(
-        color: t.highlight ? AppColors.accent.withValues(alpha: .08) : AppColors.bg,
+        color: t.highlight
+            ? AppColors.accent.withValues(alpha: AppColors.isDark ? .14 : .08)
+            : AppColors.cardAlt,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -318,10 +346,11 @@ class _TileBox extends StatelessWidget {
                 ),
                 maxLines: 1,
                 style: AppTheme.mono.copyWith(
-                  fontSize: t.small ? 13.5 : 19,
+                  fontSize: (t.small ? 13.5 : 19) * scale,
                   height: 1.0,
                   fontWeight: FontWeight.w600,
-                  color: t.color,
+                  color: t.color ?? AppColors.ink,
+                  shadows: AppColors.numberGlow,
                 ),
               ),
             ),
@@ -347,10 +376,16 @@ class _FootRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(it.$1,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10.5, height: 1.1, color: AppColors.inkSoft)),
+                Text(
+                  it.$1,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.1,
+                    color: AppColors.inkSoft,
+                  ),
+                ),
                 const SizedBox(height: 1),
                 Text.rich(
                   TextSpan(
@@ -359,15 +394,21 @@ class _FootRow extends StatelessWidget {
                       if (it.$3.isNotEmpty)
                         TextSpan(
                           text: it.$3,
-                          style: const TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.inkSoft),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.inkSoft,
+                          ),
                         ),
                     ],
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      AppTheme.mono.copyWith(fontSize: 12, height: 1.0, fontWeight: FontWeight.w600),
+                  style: AppTheme.mono.copyWith(
+                    fontSize: 12,
+                    height: 1.0,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -386,7 +427,7 @@ class _SectionGap extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(text, style: const TextStyle(fontSize: 11, color: AppColors.inkSoft)),
+        Text(text, style: TextStyle(fontSize: 11, color: AppColors.inkSoft)),
         const SizedBox(width: 6),
         const Expanded(child: Divider(height: 1, thickness: .5)),
         if (trailing != null) ...[const SizedBox(width: 6), trailing!],
@@ -410,7 +451,8 @@ class _ControllerCard extends StatelessWidget {
         link: link,
         icon: Icons.memory,
         title: link.phase == LinkPhase.online ? '已连上，等第一帧' : '还没连控制器',
-        subtitle: '支持凌博、远驱（Fardriver / VOTOL / YuanQu）、VESC 系'
+        subtitle:
+            '支持凌博、远驱（Fardriver / VOTOL / YuanQu）、VESC 系'
             '（Flipsky / MakerX / Trampa 等）。\n第一次手动选一下，以后自动连。',
       );
     }
@@ -437,7 +479,9 @@ class _ControllerCard extends StatelessWidget {
           fault != null ? '故障' : (online ? '运行正常' : '等数据'),
           style: TextStyle(
             fontSize: 11,
-            color: fault != null ? AppColors.bad : (online ? AppColors.good : AppColors.inkSoft),
+            color: fault != null
+                ? AppColors.bad
+                : (online ? AppColors.good : AppColors.inkSoft),
           ),
         ),
         body: (h) {
@@ -449,21 +493,33 @@ class _ControllerCard extends StatelessWidget {
             children: [
               if (fault != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.bad.withValues(alpha: .07),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.bad),
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 14,
+                        color: AppColors.bad,
+                      ),
                       const SizedBox(width: 5),
                       Expanded(
-                        child: Text(fault,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 11, color: AppColors.bad, fontWeight: FontWeight.w600)),
+                        child: Text(
+                          fault,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.bad,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -487,12 +543,12 @@ class _ControllerCard extends StatelessWidget {
                 '协议 ${link.driver?.name ?? '嗅探中'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
               ),
             ),
             Text(
               '${thousands(link.frameCount)} 帧',
-              style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+              style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
             ),
           ],
         ),
@@ -528,7 +584,7 @@ class _SparkArea extends StatelessWidget {
             curve
                 ? '峰 ${fmt(trend.peak)} · 均 ${fmt(trend.average)}'
                 : (noPowerField ? '该协议不上报功率' : '等曲线'),
-            style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+            style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
           ),
         ),
         const SizedBox(height: 5),
@@ -540,7 +596,7 @@ class _SparkArea extends StatelessWidget {
                 : Center(
                     child: Text(
                       noPowerField ? '这一路数据里没有功率，走势留空' : '跑起来几帧就出曲线',
-                      style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                      style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
                     ),
                   ),
           ),
@@ -560,11 +616,19 @@ class _SparkPainter extends CustomPainter {
     final base = Paint()
       ..color = AppColors.line
       ..strokeWidth = 1;
-    canvas.drawLine(Offset(0, size.height - .5), Offset(size.width, size.height - .5), base);
+    canvas.drawLine(
+      Offset(0, size.height - .5),
+      Offset(size.width, size.height - .5),
+      base,
+    );
     final dashed = Paint()
       ..color = AppColors.line.withValues(alpha: .55)
       ..strokeWidth = 1;
-    canvas.drawLine(Offset(0, size.height / 2), Offset(size.width, size.height / 2), dashed);
+    canvas.drawLine(
+      Offset(0, size.height / 2),
+      Offset(size.width, size.height / 2),
+      dashed,
+    );
 
     if (pts.length < 2) return;
 
@@ -602,11 +666,16 @@ class _SparkPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
     final lastX = dx * (pts.length - 1);
-    canvas.drawCircle(Offset(lastX, yOf(pts.last)), 2.5, Paint()..color = color);
+    canvas.drawCircle(
+      Offset(lastX, yOf(pts.last)),
+      2.5,
+      Paint()..color = color,
+    );
   }
 
   @override
-  bool shouldRepaint(_SparkPainter old) => old.pts.length != pts.length || old.color != color;
+  bool shouldRepaint(_SparkPainter old) =>
+      old.pts.length != pts.length || old.color != color;
 }
 
 // MARK: - 保护板卡
@@ -637,8 +706,9 @@ class _BmsCard extends StatelessWidget {
     final remain = findMetric(data.secondary, const ['剩余容量']);
     final cycles = findMetric(data.secondary, const ['循环']);
     final mosT = data.temps.isEmpty ? null : data.temps.reduce(math.max);
-    final tempSpread =
-        data.temps.isEmpty ? null : data.temps.reduce(math.max) - data.temps.reduce(math.min);
+    final tempSpread = data.temps.isEmpty
+        ? null
+        : data.temps.reduce(math.max) - data.temps.reduce(math.min);
 
     final flagText = data.protection.isNotEmpty
         ? data.protection.first
@@ -688,8 +758,13 @@ class _BmsCard extends StatelessWidget {
             _SectionGap(
               '剩余容量',
               trailing: Text(
-                remain == null ? '${data.soc}%' : '${remain.value} ${remain.unit} · ${data.soc}%',
-                style: AppTheme.mono.copyWith(fontSize: 11, color: AppColors.inkSoft),
+                remain == null
+                    ? '${data.soc}%'
+                    : '${remain.value} ${remain.unit} · ${data.soc}%',
+                style: AppTheme.mono.copyWith(
+                  fontSize: 11,
+                  color: AppColors.inkSoft,
+                ),
               ),
             ),
             _SocBar(soc: data.soc),
@@ -699,7 +774,11 @@ class _BmsCard extends StatelessWidget {
           ('MOS', mosT == null ? '--' : mosT.toStringAsFixed(0), '℃'),
           ('健康', data.soh == 0 ? '--' : '${data.soh}', '%'),
           ('循环', cycles?.value ?? '--', ''),
-          ('温差', tempSpread == null ? '--' : tempSpread.toStringAsFixed(0), '℃'),
+          (
+            '温差',
+            tempSpread == null ? '--' : tempSpread.toStringAsFixed(0),
+            '℃',
+          ),
         ]),
       ),
     );
@@ -723,20 +802,23 @@ class _CellBars extends StatelessWidget {
         for (var i = 0; i < cells.length; i++)
           Expanded(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: cells.length > 24 ? .6 : 1.5),
+              padding: EdgeInsets.symmetric(
+                horizontal: cells.length > 24 ? .6 : 1.5,
+              ),
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: FractionallySizedBox(
                   // 柱高最低留 30%：十六节之间常常只差十几毫伏，满量程画就全一样高了
-                  heightFactor:
-                      hi - lo < 1e-9 ? .55 : .30 + .70 * ((cells[i] - lo) / (hi - lo)),
+                  heightFactor: hi - lo < 1e-9
+                      ? .55
+                      : .30 + .70 * ((cells[i] - lo) / (hi - lo)),
                   child: Container(
                     decoration: BoxDecoration(
                       color: (i + 1) == data.maxIdx
                           ? AppColors.bad
                           : (i + 1) == data.minIdx
-                              ? AppColors.cool
-                              : const Color(0xFFCFDBEC),
+                          ? AppColors.cool
+                          : AppColors.barIdle,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -756,23 +838,31 @@ class _CellLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cells = data.cells;
-    final avg = cells.isEmpty ? 0.0 : cells.reduce((a, b) => a + b) / cells.length;
+    final avg = cells.isEmpty
+        ? 0.0
+        : cells.reduce((a, b) => a + b) / cells.length;
     return Row(
       children: [
         Expanded(
-          child: Text('#${data.minIdx} 最低 ${data.minV.toStringAsFixed(3)}V',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: AppColors.cool)),
+          child: Text(
+            '#${data.minIdx} 最低 ${data.minV.toStringAsFixed(3)}V',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: AppColors.cool),
+          ),
         ),
-        Text('平均 ${avg.toStringAsFixed(3)}V',
-            style: const TextStyle(fontSize: 11, color: AppColors.inkSoft)),
+        Text(
+          '平均 ${avg.toStringAsFixed(3)}V',
+          style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
+        ),
         Expanded(
-          child: Text('#${data.maxIdx} 最高 ${data.maxV.toStringAsFixed(3)}V',
-              textAlign: TextAlign.right,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: AppColors.bad)),
+          child: Text(
+            '#${data.maxIdx} 最高 ${data.maxV.toStringAsFixed(3)}V',
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: AppColors.bad),
+          ),
         ),
       ],
     );
@@ -786,7 +876,9 @@ class _SocBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = (soc.clamp(0, 100)) / 100.0;
-    final color = soc < 20 ? AppColors.bad : (soc < 50 ? AppColors.warn : AppColors.good);
+    final color = soc < 20
+        ? AppColors.bad
+        : (soc < 50 ? AppColors.warn : AppColors.good);
     return ClipRRect(
       borderRadius: BorderRadius.circular(3),
       child: Container(
@@ -824,11 +916,17 @@ void _showAllMetrics(BuildContext context, BleLink link, String title) {
         controller: controller,
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         children: [
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 2),
           Text(
-            [link.driver?.name ?? '未识别', link.gattInfo].where((e) => e.isNotEmpty).join(' · '),
-            style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+            [
+              link.driver?.name ?? '未识别',
+              link.gattInfo,
+            ].where((e) => e.isNotEmpty).join(' · '),
+            style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
           ),
           const SizedBox(height: 10),
           for (final m in metrics) MetricRow(m),
@@ -836,7 +934,11 @@ void _showAllMetrics(BuildContext context, BleLink link, String title) {
             const Divider(height: 22),
             Text(
               link.driver!.detail,
-              style: const TextStyle(fontSize: 12, color: AppColors.inkSoft, height: 1.6),
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.inkSoft,
+                height: 1.6,
+              ),
             ),
           ],
         ],

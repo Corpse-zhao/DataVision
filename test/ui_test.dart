@@ -52,10 +52,12 @@ void main() {
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.light(),
-      home: Scaffold(body: page),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.of(AppPalettes.classic),
+        home: Scaffold(body: page),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 100));
   }
 
@@ -134,19 +136,24 @@ void main() {
 
   testWidgets('数据台与设置页能渲染', (tester) async {
     feedController();
-    await pumpAt(tester, ConsolePage(ctrl: ctrl, bms: bms), const Size(390, 844));
+    await pumpAt(
+      tester,
+      ConsolePage(ctrl: ctrl, bms: bms),
+      const Size(390, 844),
+    );
     expect(tester.takeException(), isNull);
 
     await pumpAt(
       tester,
       SettingsPage(
-          prefs: prefs,
-          ctrl: ctrl,
-          bms: bms,
-          version: 'v1.0.7',
-          onCheckUpdate: () {},
-          onOpenDownloadPage: () {},
-          onOpenUpdate: () {}),
+        prefs: prefs,
+        ctrl: ctrl,
+        bms: bms,
+        version: 'v1.0.7',
+        onCheckUpdate: () {},
+        onOpenDownloadPage: () {},
+        onOpenUpdate: () {},
+      ),
       const Size(390, 844),
     );
     expect(tester.takeException(), isNull);
@@ -159,13 +166,14 @@ void main() {
     await pumpAt(
       tester,
       SettingsPage(
-          prefs: prefs,
-          ctrl: ctrl,
-          bms: bms,
-          version: 'v1.0.8',
-          onCheckUpdate: () {},
-          onOpenDownloadPage: () {},
-          onOpenUpdate: () {}),
+        prefs: prefs,
+        ctrl: ctrl,
+        bms: bms,
+        version: 'v1.0.8',
+        onCheckUpdate: () {},
+        onOpenDownloadPage: () {},
+        onOpenUpdate: () {},
+      ),
       // 画布拉高：「显示」这一节在列表中部，默认 640 高会构建不到
       const Size(390, 1400),
     );
@@ -220,25 +228,28 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.light(),
-      home: Scaffold(
-        body: UpdateDialog(
-          info: const UpdateInfo(
-            tag: 'v1.0.5',
-            version: '1.0.5',
-            notes: '1. 安卓端支持 App 内直接下载更新，覆盖安装不用卸载\n'
-                '2. 修了回到前台后扫描不恢复的问题\n'
-                '3. 极空保护板温度偏移取错一位',
-            apkUrl: 'https://example.com/a.apk',
-            ipaUrl: 'https://example.com/a.ipa',
-            apkSize: 51235328,
-            ipaSize: 6942996,
-            pageUrl: 'https://example.com/releases',
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.of(AppPalettes.classic),
+        home: Scaffold(
+          body: UpdateDialog(
+            info: const UpdateInfo(
+              tag: 'v1.0.5',
+              version: '1.0.5',
+              notes:
+                  '1. 安卓端支持 App 内直接下载更新，覆盖安装不用卸载\n'
+                  '2. 修了回到前台后扫描不恢复的问题\n'
+                  '3. 极空保护板温度偏移取错一位',
+              apkUrl: 'https://example.com/a.apk',
+              ipaUrl: 'https://example.com/a.ipa',
+              apkSize: 51235328,
+              ipaSize: 6942996,
+              pageUrl: 'https://example.com/releases',
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -246,5 +257,91 @@ void main() {
     // 测试跑在桌面端，Platform.isAndroid 为 false，走的是 iOS 文案分支
     expect(find.textContaining('下载 IPA'), findsOneWidget);
     expect(find.text('稍后'), findsOneWidget);
+  });
+
+  group('主题', () {
+    test('内置五套，id 唯一，深浅各半', () {
+      final all = AppPalettes.all;
+      expect(all.length, 5);
+      expect(all.map((p) => p.id).toSet().length, 5);
+      expect(all.map((p) => p.name).toSet().length, 5);
+      expect(all.where((p) => p.brightness == Brightness.dark).length, 3);
+    });
+
+    test('未知 id 回落到浅色，不会崩', () {
+      expect(AppPalettes.byId('不存在').id, 'classic');
+      expect(AppPalettes.byId(null).id, 'classic');
+      AppThemeManager.instance.restore('不存在');
+      expect(AppThemeManager.instance.id, 'classic');
+    });
+
+    test('换主题后 AppColors 跟着变', () {
+      AppThemeManager.instance.restore('classic');
+      expect(AppColors.bg, AppPalettes.classic.bg);
+      expect(AppColors.isDark, isFalse);
+      expect(AppColors.numberGlow, isNull);
+
+      AppThemeManager.instance.select('hud');
+      expect(AppColors.bg, AppPalettes.hud.bg);
+      expect(AppColors.accent, AppPalettes.hud.accent);
+      expect(AppColors.isDark, isTrue);
+      // 车载主题的数字要发光
+      expect(AppColors.numberGlow, isNotNull);
+      expect(AppColors.numberScale, greaterThan(1));
+
+      AppThemeManager.instance.restore('classic');
+    });
+
+    testWidgets('设置页点缩略图就能换主题，并记进本地', (tester) async {
+      AppThemeManager.instance.restore('classic');
+      expect(prefs.themeId, 'classic');
+
+      await pumpAt(
+        tester,
+        SettingsPage(
+          prefs: prefs,
+          ctrl: ctrl,
+          bms: bms,
+          version: 'v1.0.11',
+          onCheckUpdate: () {},
+          onOpenDownloadPage: () {},
+          onOpenUpdate: () {},
+        ),
+        const Size(390, 1400),
+      );
+
+      // 缩略图是横向滚动的：先看得到的前四套，最后一套拖出来
+      for (final p in AppPalettes.all.take(4)) {
+        expect(find.text(p.name), findsOneWidget);
+      }
+      expect(find.text(AppPalettes.daylight.name), findsNothing);
+      // 外层是竖向列表，主题条是里面的横向 ListView
+      await tester.drag(find.byType(ListView).at(1), const Offset(-200, 0));
+      await tester.pump();
+      expect(find.text(AppPalettes.daylight.name), findsOneWidget);
+      // 拖回去，保证「夜色」在可点范围内
+      await tester.drag(find.byType(ListView).at(1), const Offset(200, 0));
+      await tester.pump();
+
+      await tester.tap(find.text('夜色'));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(tester.takeException(), isNull);
+      expect(AppThemeManager.instance.id, 'midnight');
+      expect(prefs.themeId, 'midnight');
+      expect(AppColors.bg, AppPalettes.midnight.bg);
+
+      AppThemeManager.instance.restore('classic');
+    });
+
+    testWidgets('深色主题下数据页也不溢出（390x844）', (tester) async {
+      feedController();
+      feedBms();
+      AppThemeManager.instance.restore('amber');
+      await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(390, 844));
+      expect(tester.takeException(), isNull);
+      expect(find.text('母线电压'), findsOneWidget);
+      AppThemeManager.instance.restore('classic');
+    });
   });
 }

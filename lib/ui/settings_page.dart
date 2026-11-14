@@ -49,14 +49,19 @@ class _SettingsPageState extends State<SettingsPage> {
               // ListTile 放在里面会丢 Material 祖先，debug 下直接报错
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('自动连接', style: TextStyle(fontSize: 14)),
                         SizedBox(height: 2),
-                        Text('第一次手动选好设备，之后只要搜到就自己连',
-                            style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft)),
+                        Text(
+                          '第一次手动选好设备，之后只要搜到就自己连',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.inkSoft,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -87,11 +92,51 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 12),
         SectionCard(
+          title: '主题',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 112,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.zero,
+                  itemCount: AppPalettes.all.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final t = AppPalettes.all[i];
+                    return _ThemeSwatch(
+                      palette: t,
+                      selected: t.id == AppThemeManager.instance.id,
+                      onTap: () {
+                        AppThemeManager.instance.select(t.id);
+                        p.themeId = t.id;
+                        setState(() {});
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '当前：${AppThemeManager.instance.palette.name} · '
+                '${AppThemeManager.instance.palette.desc}',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: AppColors.inkSoft,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        SectionCard(
           title: '显示',
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -99,7 +144,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     SizedBox(height: 2),
                     Text(
                       '盯着看数据时不让屏幕自己黑掉。只在本 App 前台生效，退出或切后台就恢复系统熄屏；一直常亮会更费电。',
-                      style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft, height: 1.4),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.inkSoft,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -132,19 +181,29 @@ class _SettingsPageState extends State<SettingsPage> {
               Row(
                 children: [
                   const Expanded(
-                    child: Text('极对数（远驱 / VESC 转速换算）', style: TextStyle(fontSize: 13.5)),
+                    child: Text(
+                      '极对数（远驱 / VESC 转速换算）',
+                      style: TextStyle(fontSize: 13.5),
+                    ),
                   ),
                   IconButton(
                     onPressed: () {
-                      setState(() => p.polePairs = (p.polePairs - 1).clamp(1, 60));
+                      setState(
+                        () => p.polePairs = (p.polePairs - 1).clamp(1, 60),
+                      );
                       _apply();
                     },
                     icon: const Icon(Icons.remove_circle_outline, size: 20),
                   ),
-                  Text('${p.polePairs}', style: AppTheme.mono.copyWith(fontSize: 15)),
+                  Text(
+                    '${p.polePairs}',
+                    style: AppTheme.mono.copyWith(fontSize: 15),
+                  ),
                   IconButton(
                     onPressed: () {
-                      setState(() => p.polePairs = (p.polePairs + 1).clamp(1, 60));
+                      setState(
+                        () => p.polePairs = (p.polePairs + 1).clamp(1, 60),
+                      );
                       _apply();
                     },
                     icon: const Icon(Icons.add_circle_outline, size: 20),
@@ -154,9 +213,16 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Expanded(child: Text('轮询间隔', style: TextStyle(fontSize: 13.5))),
-                  Text('${p.pollMs} ms',
-                      style: AppTheme.mono.copyWith(fontSize: 13, color: AppColors.inkSoft)),
+                  const Expanded(
+                    child: Text('轮询间隔', style: TextStyle(fontSize: 13.5)),
+                  ),
+                  Text(
+                    '${p.pollMs} ms',
+                    style: AppTheme.mono.copyWith(
+                      fontSize: 13,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
                 ],
               ),
               Slider(
@@ -168,8 +234,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: (v) => setState(() => p.pollMs = v.round()),
                 onChangeEnd: (_) => _apply(),
               ),
-              const Text('间隔太短会让部分模块来不及吐完整帧（尤其蚂蚁板的 152 字节帧）',
-                  style: TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.4)),
+              Text(
+                '间隔太短会让部分模块来不及吐完整帧（尤其蚂蚁板的 152 字节帧）',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.inkSoft,
+                  height: 1.4,
+                ),
+              ),
             ],
           ),
         ),
@@ -178,16 +250,26 @@ class _SettingsPageState extends State<SettingsPage> {
           title: '支持的设备',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               _SupportRow('凌博 LBMC', 'AA55 帧 · 服务 FFF0 · 读标定后通用全系'),
-              _SupportRow('远驱 Fardriver / VOTOL / YuanQu', '16 字节 AA 帧 · 被动推送，不发请求'),
-              _SupportRow('VESC 系（Flipsky / MakerX / Trampa / Spintend）', 'Nordic UART + COMM_GET_VALUES'),
+              _SupportRow(
+                '远驱 Fardriver / VOTOL / YuanQu',
+                '16 字节 AA 帧 · 被动推送，不发请求',
+              ),
+              _SupportRow(
+                'VESC 系（Flipsky / MakerX / Trampa / Spintend）',
+                'Nordic UART + COMM_GET_VALUES',
+              ),
               _SupportRow('蚂蚁保护板 ANT', '7EA1 帧 · 三条信道自动回退'),
               _SupportRow('极空保护板 JK', '55AAEB90 帧 · JK02 布局'),
               SizedBox(height: 8),
               Text(
                 '没认出来的设备也能连：进「数据台」看原始字节，把字节发我就能加协议。',
-                style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft, height: 1.5),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: AppColors.inkSoft,
+                  height: 1.5,
+                ),
               ),
             ],
           ),
@@ -199,8 +281,13 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Row(
                 children: [
-                  const Expanded(child: Text('版本', style: TextStyle(fontSize: 13.5))),
-                  Text(widget.version, style: AppTheme.mono.copyWith(fontSize: 13)),
+                  const Expanded(
+                    child: Text('版本', style: TextStyle(fontSize: 13.5)),
+                  ),
+                  Text(
+                    widget.version,
+                    style: AppTheme.mono.copyWith(fontSize: 13),
+                  ),
                   if (widget.update != null)
                     _UpdateBadge(
                       version: widget.update!.version,
@@ -218,19 +305,27 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '数据视界 · 只看控制器和保护板的数据，不做仪表、不算车速。',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft, height: 1.5),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.inkSoft,
+                    height: 1.5,
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '安卓端可直接在 App 内下载更新；iOS 需要下载 IPA 后用全能签重签安装。',
-                  style: TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.inkSoft,
+                    height: 1.5,
+                  ),
                 ),
               ),
               const SizedBox(height: 2),
@@ -243,8 +338,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: widget.onOpenDownloadPage,
-                  child: const Text('打开下载页（更新检查不通时用）',
-                      style: TextStyle(fontSize: 12)),
+                  child: const Text(
+                    '打开下载页（更新检查不通时用）',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
               ),
             ],
@@ -286,6 +383,130 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
+/// 主题缩略图：左下角的迷你「数据卡」，用该主题自己的配色画，
+/// 一眼能看出底色深浅和主色。
+class _ThemeSwatch extends StatelessWidget {
+  final AppPalette palette;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ThemeSwatch({
+    required this.palette,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = palette;
+    return SizedBox(
+      width: 92,
+      child: Material(
+        color: t.bg,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? t.accent : AppColors.line,
+                width: selected ? 1.8 : 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: t.card,
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: t.line, width: .8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          width: 18,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: t.inkSoft.withValues(alpha: .55),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Text(
+                          '42.6',
+                          style: AppTheme.mono.copyWith(
+                            fontSize: 16,
+                            height: 1.0,
+                            fontWeight: FontWeight.w700,
+                            color: t.accent,
+                            shadows: t.glow
+                                ? [
+                                    Shadow(
+                                      color: t.accent.withValues(alpha: .45),
+                                      blurRadius: 10,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            for (final c in [t.good, t.warn, t.bad])
+                              Padding(
+                                padding: const EdgeInsets.only(right: 3),
+                                child: Container(
+                                  width: 9,
+                                  height: 3,
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (selected) ...[
+                      Icon(Icons.check_circle, size: 10, color: t.accent),
+                      const SizedBox(width: 2),
+                    ],
+                    Text(
+                      t.name,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: selected ? t.accent : t.ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SupportRow extends StatelessWidget {
   final String name;
   final String desc;
@@ -298,7 +519,7 @@ class _SupportRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 5, right: 8),
             child: Icon(Icons.check_circle, size: 14, color: AppColors.good),
           ),
@@ -306,8 +527,21 @@ class _SupportRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                Text(desc, style: const TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.4)),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  desc,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.inkSoft,
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),
@@ -338,7 +572,11 @@ class _UpdateBadge extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.arrow_circle_up_rounded, size: 12, color: AppColors.accent),
+                Icon(
+                  Icons.arrow_circle_up_rounded,
+                  size: 12,
+                  color: AppColors.accent,
+                ),
                 const SizedBox(width: 3),
                 Text(
                   '检测到新版本',

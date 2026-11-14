@@ -13,7 +13,9 @@ Future<void> showDeviceSheet(BuildContext context, BleLink link) {
     context: context,
     isScrollControlled: true,
     backgroundColor: AppColors.bg,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+    ),
     builder: (_) => _DeviceSheet(link: link),
   );
 }
@@ -42,12 +44,16 @@ class _DeviceSheetState extends State<_DeviceSheet> {
           final all = link.results;
           // 选控制器时把保护板排掉：蚂蚁 / 极空的广播名（ANT-xxx、JK-xxx）在车上
           // 跟控制器一起广播，混在列表里很容易点错，点错就连错通道、永远出不来数
-          final byRole = isBms ? all : all.where((r) => !looksLikeBmsName(advName(r))).toList();
+          final byRole = isBms
+              ? all
+              : all.where((r) => !looksLikeBmsName(advName(r))).toList();
 
           bool known(ScanResult r) {
             final name = advName(r);
             // 记住过的那台永远要显示：用户可能给它改了名，或者是个我们没收录的品牌
-            if (link.savedName.isNotEmpty && link.savedName == name) return true;
+            if (link.savedName.isNotEmpty && link.savedName == name) {
+              return true;
+            }
             return looksKnown(pool, name, servicesOf(r));
           }
 
@@ -74,7 +80,10 @@ class _DeviceSheetState extends State<_DeviceSheet> {
                     Expanded(
                       child: Text(
                         isBms ? '选择保护板' : '选择控制器',
-                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     TextButton.icon(
@@ -89,12 +98,19 @@ class _DeviceSheetState extends State<_DeviceSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 14, color: AppColors.inkSoft),
+                    Icon(
+                      Icons.info_outline,
+                      size: 14,
+                      color: AppColors.inkSoft,
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         '第一次选好之后会自动记住，以后搜到就自己连',
-                        style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.inkSoft,
+                        ),
                       ),
                     ),
                   ],
@@ -104,21 +120,35 @@ class _DeviceSheetState extends State<_DeviceSheet> {
               Flexible(
                 child: list.isEmpty
                     ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 36,
+                          horizontal: 24,
+                        ),
                         child: Center(
                           child: Text(
-                            _emptyText(isBms: isBms, total: byRole.length, hidden: hidden),
+                            _emptyText(
+                              isBms: isBms,
+                              total: byRole.length,
+                              hidden: hidden,
+                            ),
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: AppColors.inkSoft, height: 1.5),
+                            style: TextStyle(
+                              color: AppColors.inkSoft,
+                              height: 1.5,
+                            ),
                           ),
                         ),
                       )
                     : ListView.separated(
                         shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         itemCount: list.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, i) => _row(context, link, pool, list[i]),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, i) =>
+                            _row(context, link, pool, list[i]),
                       ),
               ),
               // 被过滤掉多少台要说清楚，否则「怎么少了一半设备」会让人以为搜不到
@@ -130,7 +160,10 @@ class _DeviceSheetState extends State<_DeviceSheet> {
                       Expanded(
                         child: Text(
                           '已隐藏 $hidden 台未识别设备',
-                          style: const TextStyle(fontSize: 11.5, color: AppColors.inkSoft),
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.inkSoft,
+                          ),
                         ),
                       ),
                       TextButton(
@@ -139,7 +172,8 @@ class _DeviceSheetState extends State<_DeviceSheet> {
                           minimumSize: const Size(0, 32),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        onPressed: () => setState(() => _showUnknown = !_showUnknown),
+                        onPressed: () =>
+                            setState(() => _showUnknown = !_showUnknown),
                         child: Text(
                           _showUnknown ? '只看认识的' : '显示全部',
                           style: const TextStyle(fontSize: 12),
@@ -156,7 +190,11 @@ class _DeviceSheetState extends State<_DeviceSheet> {
     );
   }
 
-  String _emptyText({required bool isBms, required int total, required int hidden}) {
+  String _emptyText({
+    required bool isBms,
+    required int total,
+    required int hidden,
+  }) {
     if (total == 0) {
       // 选择控制器时一台都没有，多半是保护板被过滤掉了
       return isBms ? '还没搜到设备，确认设备已上电' : '只搜到了保护板，控制器还没上电或不在范围内';
@@ -167,7 +205,12 @@ class _DeviceSheetState extends State<_DeviceSheet> {
     return '还没搜到设备，确认设备已上电';
   }
 
-  Widget _row(BuildContext context, BleLink link, List<DeviceDriver> pool, ScanResult r) {
+  Widget _row(
+    BuildContext context,
+    BleLink link,
+    List<DeviceDriver> pool,
+    ScanResult r,
+  ) {
     final name = advName(r);
     final drv = pickByName(pool, name) ?? pickByServices(pool, servicesOf(r));
     final saved = link.savedName.isNotEmpty && link.savedName == name;
@@ -188,14 +231,19 @@ class _DeviceSheetState extends State<_DeviceSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 3),
                     Text(
                       '${r.device.remoteId.str} · ${r.rssi} dBm',
-                      style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                      style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
                     ),
                   ],
                 ),
@@ -203,9 +251,9 @@ class _DeviceSheetState extends State<_DeviceSheet> {
               if (drv != null)
                 StatusPill(drv.name.split('（').first, AppColors.accent)
               else
-                const StatusPill('未识别', AppColors.inkSoft),
+                StatusPill('未识别', AppColors.inkSoft),
               if (saved)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(left: 6),
                   child: StatusPill('已记住', AppColors.good),
                 ),
@@ -219,7 +267,9 @@ class _DeviceSheetState extends State<_DeviceSheet> {
 
 /// 广播名优先，没有就用系统名，再没有就「未知设备」
 String advName(ScanResult r) {
-  if (r.advertisementData.advName.isNotEmpty) return r.advertisementData.advName;
+  if (r.advertisementData.advName.isNotEmpty) {
+    return r.advertisementData.advName;
+  }
   if (r.device.platformName.isNotEmpty) return r.device.platformName;
   return '未知设备';
 }
