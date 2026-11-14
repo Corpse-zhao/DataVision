@@ -73,6 +73,7 @@ class BleLink extends ChangeNotifier {
   DateTime? _lastFrameAt;
   DateTime? _lastProbeDriverAt;
   int _staleHits = 0;
+  int _channelRounds = 0;
   int _reconnectAttempt = 0;
   bool _gotFrame = false;
   bool _disposed = false;
@@ -233,6 +234,14 @@ class BleLink extends ChangeNotifier {
       return;
     }
 
+    // 连上就记住：哪怕协议还没认出来，下次也要能自动连回来
+    final rid = device.remoteId.str;
+    final nm = deviceName.isEmpty ? '未命名设备' : deviceName;
+    if (prefs.deviceId(role) != rid || prefs.deviceName(role) != nm) {
+      prefs.saveDevice(role, rid, nm);
+      _log('!', '已记住 $nm，下次搜到自动连接');
+    }
+
     _subs.add(device.connectionState.listen((s) {
       if (s == BluetoothConnectionState.disconnected && !_disposed) {
         _onDisconnected();
@@ -374,7 +383,8 @@ class BleLink extends ChangeNotifier {
 
     // 还没出数据：一条信道试 1.6 秒，不行换下一条
     if (!_gotFrame && _writeChars.length > 1) {
-      if (DateTime.now().difference(_channelStartedAt).inMilliseconds > 1600) {
+      final windowMs = _channelRounds == 0 ? 1600 : 2500;
+      if (DateTime.now().difference(_channelStartedAt).inMilliseconds > windowMs) {
         _nextChannel();
       }
     }
@@ -398,6 +408,7 @@ class BleLink extends ChangeNotifier {
   void _nextChannel() {
     if (_writeChars.isEmpty) return;
     channelIndex = (channelIndex + 1) % _writeChars.length;
+    if (channelIndex == 0) _channelRounds++;
     _writeChar = _writeChars[channelIndex];
     _channelStartedAt = DateTime.now();
     _updateGattInfo();
