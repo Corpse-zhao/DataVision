@@ -43,7 +43,7 @@ def req(method, path, token, body=None):
 def collect(root):
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".git")]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and d != ".git"]
         for fn in filenames:
             if fn in SKIP_FILES:
                 continue

@@ -1,0 +1,130 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # 苹果包只能在 macOS runner 上出
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          V=$(grep -m1 '^version:' pubspec.yaml | sed -E 's/version: *([^+ ]+).*/\1/')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$V"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.0"
+          cache: true
+
+      - name: Toolchain
+        run: |
+          flutter --version
+          xcodebuild -version
+          pod --version
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Build (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Ad-hoc sign + package IPA
+        run: |
+          set -e
+          V="${{ steps.ver.outputs.version }}"
+          APP=$(find build/ios/iphoneos -maxdepth 2 -name "Runner.app" | head -1)
+          echo "APP=$APP"
+          ls -la "$APP" | head
+          /usr/bin/codesign --force --deep --sign - --timestamp=none "$APP" || true
+          /usr/bin/codesign -dv "$APP" 2>&1 || true
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry "DataVision-v${V}.ipa" Payload
+          ls -lh "DataVision-v${V}.ipa"
+          unzip -l "DataVision-v${V}.ipa" | head -15
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: datavision-ipa
+          path: DataVision-v${{ steps.ver.outputs.version }}.ipa
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: 数据视界 v${{ steps.ver.outputs.version }}
+          body: |
+            数据视界 v${{ steps.ver.outputs.version }}
+
+            只读控制器 + 保护板数据，不做仪表、不算车速。
+
+            - 控制器：凌博 LBMC / 远驱 Fardriver·VOTOL·YuanQu / VESC 系（Flipsky·MakerX·Trampa）
+            - 保护板：蚂蚁 ANT（三条信道自动回退）/ 极空 JK
+            - 第一次手动选设备，之后搜到就自动连
+            - 数据台可看原始字节，方便以后加新协议
+
+            iOS 包为 ad-hoc 签名，越狱设备经 TrollStore / AppSync / Sideloadly 安装。
+          files: DataVision-v${{ steps.ver.outputs.version }}.ipa
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 安卓包顺手也在这里出一份，方便不进电脑也能拿到
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          V=$(grep -m1 '^version:' pubspec.yaml | sed -E 's/version: *([^+ ]+).*/\1/')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.0"
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk "DataVision-v${{ steps.ver.outputs.version }}.apk"
+          ls -lh DataVision-*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: datavision-apk
+          path: DataVision-v${{ steps.ver.outputs.version }}.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: 数据视界 v${{ steps.ver.outputs.version }}
+          body: |
+            数据视界 v${{ steps.ver.outputs.version }}
+            APK：直接安装即可（已用固定密钥签名，可直接覆盖升级）。
+          files: DataVision-v${{ steps.ver.outputs.version }}.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
