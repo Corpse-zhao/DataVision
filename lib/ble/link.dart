@@ -65,6 +65,7 @@ class BleLink extends ChangeNotifier {
   Timer? _reconnectTimer;
   Timer? _scanWindowTimer;
   StreamSubscription? _scanSub;
+  StreamSubscription? _adapterSub;
   bool _joinedBus = false;
   int _tick = 0;
   int _probeDriverIdx = 0;
@@ -112,14 +113,14 @@ class BleLink extends ChangeNotifier {
   }
 
   void _watchAdapter() {
-    _subs.add(FlutterBluePlus.adapterState.listen((state) {
+    _adapterSub = FlutterBluePlus.adapterState.listen((state) {
       if (state == BluetoothAdapterState.off) {
         _setPhase(LinkPhase.error, '蓝牙未打开');
       } else if (state == BluetoothAdapterState.on && phase == LinkPhase.error && error == '蓝牙未打开') {
         _setPhase(LinkPhase.idle, '蓝牙已就绪');
         if (prefs.autoConnect && hasSaved) startScan(auto: true);
       }
-    }));
+    });
   }
 
   // MARK: - 扫描
@@ -328,6 +329,10 @@ class BleLink extends ChangeNotifier {
     _gotFrame = false;
     _staleHits = 0;
 
+    if (driver?.passive ?? false) {
+      channelCount = 0;
+      gattInfo = '被动接收（设备自己推，不用发请求）';
+    }
     _updateGattInfo();
     _setPhase(LinkPhase.ready, '已连接，等数据');
     _log('!', '写入信道 ${channelCount} 条，先用第 1 条');
@@ -469,6 +474,10 @@ class BleLink extends ChangeNotifier {
   }
 
   void _updateGattInfo() {
+    if (channelCount == 0) {
+      notifyListeners();
+      return;
+    }
     final n = _writeChar;
     final name = n == null ? '无写入通道' : shortUuid(n.uuid.str);
     gattInfo = '信道 ${channelIndex + 1}/$channelCount：$name';
@@ -559,6 +568,7 @@ class BleLink extends ChangeNotifier {
     _reconnectTimer?.cancel();
     _scanWindowTimer?.cancel();
     _scanSub?.cancel();
+    _adapterSub?.cancel();
     if (_joinedBus) ScanBus.instance.leave(this);
     for (final s in _subs) {
       s.cancel();

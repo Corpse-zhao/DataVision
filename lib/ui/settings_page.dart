@@ -32,19 +32,32 @@ class _SettingsPageState extends State<SettingsPage> {
           title: '连接',
           child: Column(
             children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('自动连接', style: TextStyle(fontSize: 14)),
-                subtitle: const Text('第一次手动选好设备，之后只要搜到就自己连',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft)),
-                value: p.autoConnect,
-                onChanged: (v) {
-                  setState(() => p.autoConnect = v);
-                  if (v) {
-                    widget.ctrl.startScan(auto: true);
-                    widget.bms.startScan(auto: true);
-                  }
-                },
+              // 用 Row + Switch 而不是 SwitchListTile：卡片本身是带底色的 Container，
+              // ListTile 放在里面会丢 Material 祖先，debug 下直接报错
+              Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('自动连接', style: TextStyle(fontSize: 14)),
+                        SizedBox(height: 2),
+                        Text('第一次手动选好设备，之后只要搜到就自己连',
+                            style: TextStyle(fontSize: 11.5, color: AppColors.inkSoft)),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: p.autoConnect,
+                    onChanged: (v) {
+                      setState(() => p.autoConnect = v);
+                      if (v) {
+                        widget.ctrl.startScan(auto: true);
+                        widget.bms.startScan(auto: true);
+                      }
+                    },
+                  ),
+                ],
               ),
               const Divider(height: 18),
               _deviceRow('控制器', p.deviceName('controller'), () async {

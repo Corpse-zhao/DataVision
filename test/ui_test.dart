@@ -1,0 +1,107 @@
+import 'package:material_ui/material_ui.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:datavision/ble/link.dart';
+import 'package:datavision/core/prefs.dart';
+import 'package:datavision/drivers/jk_bms.dart';
+import 'package:datavision/drivers/lingbo.dart';
+import 'package:datavision/drivers/registry.dart';
+import 'package:datavision/ui/bms_page.dart';
+import 'package:datavision/ui/console_page.dart';
+import 'package:datavision/ui/controller_page.dart';
+import 'package:datavision/ui/settings_page.dart';
+import 'package:datavision/ui/theme.dart';
+
+import 'protocol_test.dart' as frames;
+
+/// 界面冒烟测试：用真实解析出来的数据把三个页面渲染一遍。
+/// 目的不是"好看不好看"，是抓 RenderFlex overflow 和空值崩溃——
+/// 手机上这些会变成黄色斑马纹或者白屏，肉眼很难在代码里发现。
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late Prefs prefs;
+  late BleLink ctrl;
+  late BleLink bms;
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    prefs = Prefs();
+    await prefs.load();
+    ctrl = BleLink(role: 'controller', pool: controllerDrivers(), prefs: prefs);
+    bms = BleLink(role: 'bms', pool: bmsDrivers(), prefs: prefs);
+  });
+
+  void feedController() {
+    final d = LingboDriver();
+    d.feed(frames.lingboCalibration());
+    d.feed(frames.lingboRealtime());
+    ctrl.driver = d;
+  }
+
+  void feedBms() {
+    final d = JkBmsDriver();
+    d.feed(frames.jkCellFrame(cells: 16));
+    bms.driver = d;
+  }
+
+  Future<void> pumpAt(WidgetTester tester, Widget page, Size size) async {
+    tester.view.physicalSize = size * 3;
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light(),
+      home: Scaffold(body: page),
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+
+  testWidgets('控制器页有数据时布局不溢出（竖屏 390）', (tester) async {
+    feedController();
+    await pumpAt(tester, ControllerPage(link: ctrl), const Size(390, 844));
+    expect(tester.takeException(), isNull);
+    expect(find.text('母线电压'), findsOneWidget);
+    expect(find.text('60.3'), findsOneWidget);
+  });
+
+  testWidgets('控制器页横屏也正常（844x390）', (tester) async {
+    feedController();
+    await pumpAt(tester, ControllerPage(link: ctrl), const Size(844, 390));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('控制器页空态', (tester) async {
+    await pumpAt(tester, ControllerPage(link: ctrl), const Size(390, 844));
+    expect(tester.takeException(), isNull);
+    expect(find.text('还没连控制器'), findsOneWidget);
+  });
+
+  testWidgets('保护板页渲染 16 串单体网格', (tester) async {
+    feedBms();
+    await pumpAt(tester, BmsPage(link: bms), const Size(390, 844));
+    expect(tester.takeException(), isNull);
+    expect(find.text('单体电压（16S）'), findsOneWidget);
+  });
+
+  testWidgets('保护板页小屏也不溢出（360x640）', (tester) async {
+    feedBms();
+    await pumpAt(tester, BmsPage(link: bms), const Size(360, 640));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('数据台与设置页能渲染', (tester) async {
+    feedController();
+    await pumpAt(tester, ConsolePage(ctrl: ctrl, bms: bms), const Size(390, 844));
+    expect(tester.takeException(), isNull);
+
+    await pumpAt(
+      tester,
+      SettingsPage(prefs: prefs, ctrl: ctrl, bms: bms, version: '1.0.0'),
+      const Size(390, 844),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('自动连接'), findsOneWidget);
+  });
+}

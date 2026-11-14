@@ -147,12 +147,13 @@ class VescDriver extends DeviceDriver {
       _ampHours = i32be(p, o) / 10000.0;
       o += 4;
     }
-    if (p.length > o + 4 * 4 + 1) {
+    if (p.length > o + 4 * 6 + 1) {
       o += 4; // amp_hours_charged
       _wattHours = i32be(p, o) / 10000.0;
       o += 4; // watt_hours_charged
       o += 4; // tachometer
       o += 4; // tachometer_abs
+      o += 4; // 走到 fault 字节
       _fault = p[o] & 0xFF;
     }
 
