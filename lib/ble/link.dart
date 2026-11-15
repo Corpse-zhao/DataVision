@@ -110,6 +110,10 @@ class BleLink extends ChangeNotifier {
   int _reconnectAttempt = 0;
   bool _gotFrame = false;
   bool _disposed = false;
+
+  /// 正在建立连接。**不能拿 phase 当这把锁**：掉线重连时 phase 本身就是
+  /// 'connecting'，用它判断会让重连第一次就被自己挡掉，之后永远连不上。
+  bool _connecting = false;
   DateTime? _lastRawNotifyAt;
 
   /// 每解析出一帧就 +1（探测信道时用来判断「这个等待窗口里有没有回帧」）
@@ -221,7 +225,7 @@ class BleLink extends ChangeNotifier {
 
     if (prefs.autoConnect && hasSaved) {
       final hit = list.where(_isSaved).toList();
-      if (hit.isNotEmpty && !connected && phase != LinkPhase.connecting) {
+      if (hit.isNotEmpty && !connected && !_connecting) {
         _log('!', '找到已记住的设备：${_nameOf(hit.first)}');
         connectDevice(hit.first.device);
       }
@@ -270,7 +274,60 @@ class BleLink extends ChangeNotifier {
   Future<void> connect(ScanResult r) => connectDevice(r.device);
 
   Future<void> connectDevice(BluetoothDevice device) async {
-    if (phase == LinkPhase.connecting) return;
+    if (_connecting || _disposed) return;
+    _connecting = true;
+    try {
+      await _doConnect(device);
+    } finally {
+      _connecting = false;
+    }
+  }
+
+  /// 按三级顺序建链：带 MTU → 不带 MTU → 先断开再连一次。
+  ///
+  /// 远驱这类串口透传模块不接受 MTU 交换，带 `mtu: 247` 会直接连不上；
+  /// 系统里残留半死连接时又得先 disconnect 才能重连。只试一次的话，
+  /// 第一次失败之后就永远「连接不上」。
+  Future<bool> _openLink(BluetoothDevice device) async {
+    const steps = <(String, bool, bool)>[
+      ('直连 MTU 247', true, false),
+      ('不带 MTU 直连', false, false),
+      ('断开后重连', false, true),
+    ];
+    for (var i = 0; i < steps.length; i++) {
+      final (label, withMtu, resetFirst) = steps[i];
+      if (resetFirst) {
+        try {
+          await device.disconnect();
+        } catch (_) {}
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+      try {
+        if (withMtu) {
+          await device.connect(
+            license: License.nonprofit,
+            timeout: const Duration(seconds: 12),
+            mtu: 247,
+          );
+        } else {
+          await device.connect(
+            license: License.nonprofit,
+            timeout: const Duration(seconds: 12),
+          );
+        }
+        if (i > 0) _log('!', '$label 连上了');
+        return true;
+      } catch (e) {
+        error = '$e';
+        _log('!', '$label 失败：$e');
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+    }
+    _log('!', '连不上：确认官方 App 已断开、控制器已上电，然后再点一次');
+    return false;
+  }
+
+  Future<void> _doConnect(BluetoothDevice device) async {
     await stopScan();
     _device = device;
     deviceName = device.platformName.isNotEmpty
@@ -278,18 +335,11 @@ class BleLink extends ChangeNotifier {
         : device.advName;
     await _teardownGatt();
     _setPhase(LinkPhase.connecting, '连接中');
+    error = null;
     _log('!', '连接 $deviceName');
 
-    try {
-      await device.connect(
-        license: License.nonprofit,
-        timeout: const Duration(seconds: 15),
-        mtu: 247,
-      );
-    } catch (e) {
-      error = '$e';
+    if (!await _openLink(device)) {
       _setPhase(LinkPhase.error, '连接失败');
-      _log('!', '连接失败：$e');
       _scheduleReconnect();
       return;
     }
@@ -549,10 +599,11 @@ class BleLink extends ChangeNotifier {
 
     // ① 连上 20 秒一个字节都没收到：多半是通知口没订上 / 信道全错。
     //    断开重连会重走 discoverServices + 订阅，比在原地换信道有用得多。
-    if (LinkPolicy.reconnectZeroByte(
-      rxCount: rxCount,
-      sinceLink: DateTime.now().difference(_linkStartedAt),
-    )) {
+    if ((driver?.passive != true) &&
+        LinkPolicy.reconnectZeroByte(
+          rxCount: rxCount,
+          sinceLink: DateTime.now().difference(_linkStartedAt),
+        )) {
       _zeroByteLinks++;
       if (_zeroByteLinks >= 2) {
         // 连续两次都 0 字节，说明本地记的那条信道是错的，清掉
@@ -786,6 +837,33 @@ class BleLink extends ChangeNotifier {
     _subs.clear();
     _writeChars.clear();
     _writeChar = null;
+  }
+
+  /// 手动「重新连接」：断开当前链路，再用记住的设备立刻重连一次。
+  ///
+  /// 走 `_onDisconnected` 这条路是为了复用同一套重连调度 —— 界面上的
+  /// 「重新连接」和掉线自动重连必须是同一条代码路径，不然修了一个漏另一个。
+  Future<void> reconnectNow() async {
+    _reconnectTimer?.cancel();
+    final id = _device?.remoteId.str ?? prefs.deviceId(role);
+    try {
+      await _device?.disconnect();
+    } catch (_) {}
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    await _teardownGatt();
+    _gotFrame = false;
+    _lastFrameAt = null;
+    _framesOnChannel = 0;
+    _staleHits = 0;
+    _zeroByteLinks = 0;
+    driver?.reset();
+    if (id != null) {
+      _setPhase(LinkPhase.connecting, '重新连接');
+      _scheduleReconnect();
+    } else {
+      await startScan(auto: true);
+    }
   }
 
   Future<void> disconnect({bool forget = false}) async {

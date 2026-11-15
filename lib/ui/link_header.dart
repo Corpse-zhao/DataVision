@@ -106,18 +106,30 @@ class LinkHeader extends StatelessWidget {
   }
 }
 
-/// 空状态：没连上时给一个明显的入口，别让人对着空屏发愣
+/// 空状态：没连上时给一个明显的入口，别让人对着空屏发愣。
+///
+/// 「连上了但没数据」也走这里 —— 那种情况最容易被误报成「连接不上」，
+/// 所以按钮换成「重新连接」，再用 [note] 把现在到底收到多少字节写清楚。
 class EmptyHint extends StatelessWidget {
   final BleLink link;
   final String title;
   final String subtitle;
   final IconData icon;
+
+  /// 已经连上（只是没数据）时补的技术说明：多少字节、下一步该发我什么
+  final String? note;
+
+  /// 是否已连接：已连接就不该再让人去「搜索设备」
+  final bool connected;
+
   const EmptyHint({
     super.key,
     required this.link,
     required this.title,
     required this.subtitle,
     this.icon = Icons.bluetooth,
+    this.note,
+    this.connected = false,
   });
 
   @override
@@ -130,6 +142,7 @@ class EmptyHint extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             title,
+            textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
@@ -142,15 +155,43 @@ class EmptyHint extends StatelessWidget {
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () async {
-              await link.startScan();
-              if (context.mounted) showDeviceSheet(context, link);
-            },
-            icon: const Icon(Icons.search, size: 18),
-            label: const Text('搜索设备'),
-          ),
+          if (note != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.cardAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.line),
+              ),
+              child: Text(
+                note!,
+                textAlign: TextAlign.left,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: AppColors.inkSoft,
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          if (connected)
+            OutlinedButton.icon(
+              onPressed: () => link.reconnectNow(),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('重新连接'),
+            )
+          else
+            FilledButton.icon(
+              onPressed: () async {
+                await link.startScan();
+                if (context.mounted) showDeviceSheet(context, link);
+              },
+              icon: const Icon(Icons.search, size: 18),
+              label: const Text('搜索设备'),
+            ),
           const SizedBox(height: 10),
         ],
       ),

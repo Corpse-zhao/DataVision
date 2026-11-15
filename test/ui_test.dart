@@ -259,6 +259,45 @@ void main() {
     expect(find.text('稍后'), findsOneWidget);
   });
 
+  group('连上了但没数据的诊断文案', () {
+    test('0 字节：说清是链路层问题，并带上通知口', () {
+      final l = BleLink(
+        role: 'controller',
+        pool: controllerDrivers(),
+        prefs: prefs,
+      );
+      l.rxBytes = 0;
+      l.notifyInfo = '2 个（FFE1、FFE2）';
+      final t = diagnose(l, '控制器');
+      expect(t, contains('0 字节'));
+      expect(t, contains('FFE1'));
+    });
+
+    test('通知口一个都没订上时不能显示空白', () {
+      final l = BleLink(
+        role: 'controller',
+        pool: controllerDrivers(),
+        prefs: prefs,
+      );
+      l.rxBytes = 0;
+      final t = diagnose(l, '控制器');
+      expect(t, contains('没订上'));
+    });
+
+    test('有字节但没帧：指向协议问题，要原始字节', () {
+      final l = BleLink(
+        role: 'controller',
+        pool: controllerDrivers(),
+        prefs: prefs,
+      );
+      l.rxCount = 3;
+      l.rxBytes = 48;
+      final t = diagnose(l, '控制器');
+      expect(t, contains('48 字节'));
+      expect(t, contains('最近帧'));
+    });
+  });
+
   group('主题', () {
     test('内置五套，id 唯一，深浅各半', () {
       final all = AppPalettes.all;
@@ -338,7 +377,11 @@ void main() {
       feedController();
       feedBms();
       AppThemeManager.instance.restore('amber');
-      await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), const Size(390, 844));
+      await pumpAt(
+        tester,
+        DataPage(ctrl: ctrl, bms: bms),
+        const Size(390, 844),
+      );
       expect(tester.takeException(), isNull);
       expect(find.text('母线电压'), findsOneWidget);
       AppThemeManager.instance.restore('classic');

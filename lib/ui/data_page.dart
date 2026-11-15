@@ -133,6 +133,22 @@ String thousands(int n) {
   return buf.toString();
 }
 
+/// 「连上了但没数据」时的诊断说明。
+///
+/// 这两种情况差得很远，必须分开说：
+///   0 字节  → 订阅没订上 / 板子没在推，属于链路层问题
+///   有字节  → 帧头或校验对不上，属于协议问题，要看原始字节
+String diagnose(BleLink link, String what) {
+  if (link.rxBytes == 0) {
+    final notify = link.notifyInfo.isEmpty ? '没订上任何一个' : link.notifyInfo;
+    return '现状：0 字节 · 通知口 $notify\n'
+        '把这两行连同「数据台」里的信道一起发我，能判断是订阅问题还是$what不推数据。';
+  }
+  return '现状：收到 ${link.rxCount} 包 / ${link.rxBytes} 字节，但没解析出完整帧\n'
+      '链路是通的，差的只是帧格式（多半换了新固件）。'
+      '把「数据台 → 最近帧」那串十六进制发我，我按新固件加协议。';
+}
+
 /// 驱动名压成短品牌：「凌博 LBMC」→「凌博」，「蚂蚁保护板（ANT）」→「蚂蚁」
 String brandOf(String? driverName, String fallback) {
   if (driverName == null || driverName.isEmpty) return fallback;
@@ -447,13 +463,18 @@ class _ControllerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = link.controller;
     if (data == null) {
+      final waiting = link.connected;
       return EmptyHint(
         link: link,
         icon: Icons.memory,
-        title: link.phase == LinkPhase.online ? '已连上，等第一帧' : '还没连控制器',
-        subtitle:
-            '支持凌博、远驱（Fardriver / VOTOL / YuanQu）、VESC 系'
-            '（Flipsky / MakerX / Trampa 等）。\n第一次手动选一下，以后自动连。',
+        connected: waiting,
+        title: waiting ? '已连上，还没收到数据' : '还没连控制器',
+        subtitle: waiting
+            ? '远驱这类控制器是「连上就自己推」：先确认控制器已上电、点火开关打开。'
+                  '\n还是空的话点下面重新连接，让它重新订阅一次。'
+            : '支持凌博、远驱（Fardriver / VOTOL / YuanQu）、VESC 系'
+                  '（Flipsky / MakerX / Trampa 等）。\n第一次手动选一下，以后自动连。',
+        note: waiting ? diagnose(link, '控制器') : null,
       );
     }
 
@@ -688,11 +709,17 @@ class _BmsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = link.bms;
     if (data == null) {
+      final waiting = link.connected;
       return EmptyHint(
         link: link,
         icon: Icons.battery_std,
-        title: link.phase == LinkPhase.online ? '已连上，等第一帧' : '还没连保护板',
-        subtitle: '支持蚂蚁（ANT）和极空（JK）。\n蚂蚁板有三条信道，第一条不通会自动换第二条、第三条。',
+        connected: waiting,
+        title: waiting ? '已连上，还没收到数据' : '还没连保护板',
+        subtitle: waiting
+            ? '先确认保护板已上电、蓝牙没被官方 App 占着。'
+                  '\n还是空的话点下面重新连接，让它重新订阅一次。'
+            : '支持蚂蚁（ANT）和极空（JK）。\n蚂蚁板有三条信道，第一条不通会自动换第二条、第三条。',
+        note: waiting ? diagnose(link, '保护板') : null,
       );
     }
 
