@@ -8,7 +8,7 @@
 | 类别 | 品牌 | 说明 |
 |---|---|---|
 | 控制器 | 凌博 LBMC | `AA 55 LEN CMD … SUM8`，服务 FFF0（写 FFF2 / 通知 FFF1），先读标定帧拿换算分母，所以全系电压平台通用 |
-| 控制器 | 远驱 Fardriver / VOTOL / YuanQu | 固定 16 字节 `AA` 帧、CRC 初值 0x7F3C，**被动推送**不发请求；电压/电流/双温/SOC/挡位直读 |
+| 控制器 | 远驱 Fardriver / VOTOL / YuanQu | 16 字节 `AA` 帧、CRC 初值 0x7F3C；**要先发「开始采集」命令**（8 字节 `AA 07 F8 …`）它才刷数据；电压/电流/双温/SOC/挡位直读 |
 | 控制器 | VESC 系（Flipsky / MakerX / Trampa / Spintend…） | Nordic UART + `COMM_GET_VALUES`，刷 VESC 固件的都通用 |
 | 保护板 | 蚂蚁 ANT | `7E A1 … CRC16 AA 55`。**三条信道依次回退**：第一条不回数据就换第二条、第三条，跑通后记住 |
 | 保护板 | 极空 JK | `55 AA EB 90` 300 字节帧，JK02 布局，单体/温度/均衡/MOS/告警全读 |
