@@ -174,7 +174,7 @@ class _DataVisionAppState extends State<DataVisionApp>
                   ? null
                   : NavigationBar(
                       height: 58,
-                      backgroundColor: AppColors.card,
+                      backgroundColor: AppColors.navSurface,
                       indicatorColor: AppColors.accent.withValues(alpha: .10),
                       selectedIndex: _index,
                       labelBehavior:

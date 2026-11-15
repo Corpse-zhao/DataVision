@@ -2,11 +2,21 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/models.dart';
 
+/// 背景装饰。都是"氛围"，alpha 一律压得很低，绝不能和数据抢注意力。
+enum Deco {
+  none,
+  grid, // 方格纸
+  dots, // 点阵
+  scan, // CRT 扫描线
+}
+
 /// 一套主题 = 一组颜色 + 几个造型参数。
 ///
 /// 只放「换主题要跟着变」的东西：底色、卡片色、字色、四种语义色，外加圆角、
-/// 数字缩放、发光、背景网格。字号排布、留白这些不算主题，各页自己定，
+/// 数字缩放、发光、背景装饰。字号排布、留白这些不算主题，各页自己定，
 /// 免得换主题把版式也换乱了。
+///
+/// 渐变相关的字段全是可选的：给 null 就退回纯色，老主题一行都不用改。
 class AppPalette {
   final String id;
   final String name;
@@ -30,7 +40,20 @@ class AppPalette {
   final double radius;
   final double numberScale; // 数字字号倍数（强光/车载主题放大一点）
   final bool glow; // 数字带光晕
-  final bool grid; // 背景细网格
+  final Deco deco;
+
+  /// 页面底色渐变（纵向）。给了就把 appBar / 底栏也一起对上，接缝看不出来。
+  final List<Color>? bgGrad;
+
+  /// 主色渐变：主数值、走势线用它上色
+  final List<Color>? accentGrad;
+
+  /// 卡片自身的纵向渐变（上浅下深，让卡片有点"厚度"）
+  final Color? cardTop;
+  final Color? cardBottom;
+
+  /// 卡片描边渐变。给了就是一圈双色"霓虹边"，比一根灰线花哨得多
+  final List<Color>? borderGrad;
 
   const AppPalette({
     required this.id,
@@ -52,8 +75,22 @@ class AppPalette {
     this.radius = 14,
     this.numberScale = 1.0,
     this.glow = false,
-    this.grid = false,
+    this.deco = Deco.none,
+    this.bgGrad,
+    this.accentGrad,
+    this.cardTop,
+    this.cardBottom,
+    this.borderGrad,
   });
+
+  /// 有没有背景装饰（老代码按 grid 判断，保留这个读法）
+  bool get grid => deco != Deco.none;
+
+  /// 顶栏/状态栏那一圈该用什么颜色：有渐变就跟渐变的第一格对齐
+  Color get chrome => bgGrad?.first ?? bg;
+
+  /// 底部导航：跟渐变的最后一格对齐，页面就"长"到底了
+  Color get navSurface => bgGrad?.last ?? card;
 }
 
 class AppPalettes {
@@ -120,7 +157,7 @@ class AppPalettes {
     radius: 10,
     numberScale: 1.06,
     glow: true,
-    grid: true,
+    deco: Deco.grid,
   );
 
   /// 4. 琥珀：老仪表盘的暖光，长途夜骑最耐看
@@ -144,35 +181,133 @@ class AppPalettes {
     radius: 8,
     numberScale: 1.06,
     glow: true,
-    grid: true,
+    deco: Deco.grid,
   );
 
-  /// 5. 强光：接近纯白 + 纯黑字 + 大一号数字，正午太阳下用
-  static const daylight = AppPalette(
-    id: 'daylight',
+  /// 5. 强光：纯白 + 纯黑描边 + 直角 + 更大的黑字，像电子墨水屏。
+  /// 它和「浅色」的区别不在颜色，而在**版式质感**：浅色是柔和的灰底白卡圆角，
+  /// 强光是硬黑边框、方角、数字全黑、字号放大——太阳底下要的是对比度不是美观。
+  static const stronglight = AppPalette(
+    id: 'stronglight',
     name: '强光',
-    desc: '又黑又大的字，太阳底下也读得清',
+    desc: '纯白黑边直角，正午太阳底下最硬',
     brightness: Brightness.light,
-    bg: Color(0xFFEDF0F3),
+    bg: Color(0xFFFFFFFF),
     card: Color(0xFFFFFFFF),
-    cardAlt: Color(0xFFE9EDF1),
+    cardAlt: Color(0xFFF4F4F4),
     ink: Color(0xFF000000),
-    inkSoft: Color(0xFF3C444C),
-    line: Color(0xFFC9D0D8),
-    accent: Color(0xFF0B5FFF),
-    good: Color(0xFF067647),
-    warn: Color(0xFF9A4A00),
+    inkSoft: Color(0xFF3C3C3C),
+    line: Color(0xFF1A1A1A),
+    accent: Color(0xFF000000),
+    good: Color(0xFF00662B),
+    warn: Color(0xFF8A4A00),
     bad: Color(0xFFB00020),
-    cool: Color(0xFF026AA2),
-    barIdle: Color(0xFFB9C3CE),
-    radius: 8,
-    numberScale: 1.14,
+    cool: Color(0xFF00377A),
+    barIdle: Color(0xFF8A8A8A),
+    radius: 3,
+    numberScale: 1.2,
   );
 
-  static const all = <AppPalette>[classic, midnight, hud, amber, daylight];
+  /// 6. 霓虹：深紫底 + 品红/青双色，卡片一圈渐变描边，CRT 扫描线
+  static const neon = AppPalette(
+    id: 'neon',
+    name: '霓虹',
+    desc: '深紫底、品红配青，卡片描边会发光',
+    brightness: Brightness.dark,
+    bg: Color(0xFF14002B),
+    bgGrad: [Color(0xFF22003F), Color(0xFF12002A), Color(0xFF070016)],
+    card: Color(0xFF1B0A34),
+    cardTop: Color(0xFF24113F),
+    cardBottom: Color(0xFF140726),
+    cardAlt: Color(0xFF210D3C),
+    ink: Color(0xFFF7EEFF),
+    inkSoft: Color(0xFFA98BC7),
+    line: Color(0xFF3B2362),
+    accent: Color(0xFFFF2FB9),
+    accentGrad: [Color(0xFFFF2FB9), Color(0xFF9B5BFF), Color(0xFF2FE8FF)],
+    borderGrad: [Color(0xFFFF2FB9), Color(0xFF2FE8FF)],
+    good: Color(0xFF2FE8C0),
+    warn: Color(0xFFFFC24B),
+    bad: Color(0xFFFF4D6D),
+    cool: Color(0xFF2FE8FF),
+    barIdle: Color(0xFF412C6B),
+    radius: 18,
+    numberScale: 1.02,
+    glow: true,
+    deco: Deco.scan,
+  );
 
-  static AppPalette byId(String? id) =>
-      all.firstWhere((p) => p.id == id, orElse: () => classic);
+  /// 7. 极光：墨绿底泛青紫，数字是青→蓝→紫的渐变
+  static const aurora = AppPalette(
+    id: 'aurora',
+    name: '极光',
+    desc: '墨绿底泛青紫，数字自带渐变色',
+    brightness: Brightness.dark,
+    bg: Color(0xFF04141A),
+    bgGrad: [Color(0xFF07282F), Color(0xFF06191F), Color(0xFF08121F)],
+    card: Color(0xFF0A2129),
+    cardTop: Color(0xFF0E2C36),
+    cardBottom: Color(0xFF081A21),
+    cardAlt: Color(0xFF0F2A33),
+    ink: Color(0xFFEAFBF6),
+    inkSoft: Color(0xFF7FA6A6),
+    line: Color(0xFF1D3E44),
+    accent: Color(0xFF5BFFC4),
+    accentGrad: [Color(0xFF5BFFC4), Color(0xFF5BD8FF), Color(0xFF9B8BFF)],
+    good: Color(0xFF5BFFC4),
+    warn: Color(0xFFFFD166),
+    bad: Color(0xFFFF5C7A),
+    cool: Color(0xFF5BD8FF),
+    barIdle: Color(0xFF23565C),
+    radius: 14,
+    numberScale: 1.02,
+    glow: true,
+    deco: Deco.dots,
+  );
+
+  /// 8. 糖果：浅色里花哨的那一个 —— 粉蓝渐变底、粉紫渐变数字、大圆角
+  static const candy = AppPalette(
+    id: 'candy',
+    name: '糖果',
+    desc: '粉蓝渐变底，数字是粉紫渐变',
+    brightness: Brightness.light,
+    bg: Color(0xFFFAF3FA),
+    bgGrad: [Color(0xFFFDEFF8), Color(0xFFF4EFFF), Color(0xFFEAF4FF)],
+    card: Color(0xFFFFFFFF),
+    cardTop: Color(0xFFFFFFFF),
+    cardBottom: Color(0xFFFBF7FF),
+    cardAlt: Color(0xFFF6F1FE),
+    ink: Color(0xFF231B2F),
+    inkSoft: Color(0xFF7A6E8C),
+    line: Color(0xFFEADFF5),
+    accent: Color(0xFFE01F7A),
+    accentGrad: [Color(0xFFE01F7A), Color(0xFFA03BE0), Color(0xFF8B4BFF)],
+    good: Color(0xFF0E9F6E),
+    warn: Color(0xFFD97706),
+    bad: Color(0xFFE11D48),
+    // 纯正的宝蓝压在粉紫页面上太跳，换成偏紫的蓝
+    cool: Color(0xFF6B5BFF),
+    barIdle: Color(0xFFDCCBF0),
+    radius: 20,
+    deco: Deco.dots,
+  );
+
+  static const all = <AppPalette>[
+    classic,
+    stronglight,
+    candy,
+    midnight,
+    hud,
+    amber,
+    neon,
+    aurora,
+  ];
+
+  static AppPalette byId(String? id) {
+    // 老的「强光」被重做过一版（id 一起换了），老用户的选择要接得上
+    final key = id == 'daylight' ? stronglight.id : id;
+    return all.firstWhere((p) => p.id == key, orElse: () => classic);
+  }
 }
 
 /// 当前主题。整个 App 只有这一个可变点，改完 notify 就从根上重建。
@@ -220,13 +355,42 @@ class AppColors {
   static double get numberScale => _p.numberScale;
   static bool get glow => _p.glow;
   static bool get grid => _p.grid;
+  static Deco get deco => _p.deco;
   static bool get isDark => _p.brightness == Brightness.dark;
+
+  static List<Color>? get bgGrad => _p.bgGrad;
+  static List<Color>? get accentGrad => _p.accentGrad;
+  static Color get chrome => _p.chrome;
+  static Color get navSurface => _p.navSurface;
 
   /// 细线：分隔线、图表基线。比 line 再淡一档，避免版面被横线切碎
   static Color get hairline => _p.line.withValues(alpha: isDark ? .85 : .75);
 
   /// 图表网格线，只用在图里
   static Color get gridLine => _p.line.withValues(alpha: isDark ? .55 : .5);
+
+  /// 卡片外观。有渐变底色就用渐变，有描边渐变就用双色霓虹边，否则退回一根细灰线。
+  ///
+  /// [color] 用于"另铺一层底色"的场合（页脚、指标条），此时一律纯色不渐变。
+  static BoxDecoration cardBox({Color? color, double? radius}) {
+    final r = radius ?? _p.radius;
+    final useGrad = color == null && _p.cardTop != null;
+    final grad = _p.borderGrad;
+    return BoxDecoration(
+      color: useGrad ? null : (color ?? _p.card),
+      gradient: useGrad
+          ? LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [_p.cardTop!, _p.cardBottom ?? _p.cardTop!],
+            )
+          : null,
+      borderRadius: BorderRadius.circular(r),
+      border: grad == null
+          ? Border.all(color: hairline)
+          : GradientBorder(colors: grad, width: 1, radius: r),
+    );
+  }
 
   /// 数字光晕（只有 HUD / 琥珀这类主题给）。
   ///
@@ -278,7 +442,8 @@ class AppTheme {
       cardColor: p.card,
       splashFactory: InkSparkle.splashFactory,
       appBarTheme: AppBarTheme(
-        backgroundColor: p.bg,
+        // 顶栏要跟背景渐变的起点对齐，否则顶上会出一条明显的分界
+        backgroundColor: p.chrome,
         foregroundColor: p.ink,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -289,7 +454,7 @@ class AppTheme {
         dragHandleColor: p.line,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: p.card,
+        backgroundColor: p.navSurface,
         surfaceTintColor: Colors.transparent,
         indicatorColor: p.accent.withValues(alpha: dark ? .18 : .10),
         labelTextStyle: WidgetStatePropertyAll(
@@ -341,52 +506,179 @@ class AppTheme {
   );
 }
 
-/// 背景网格：只给车载/HUD 主题用，画一层极淡的格子，让纯黑底不那么"空"。
+/// 双色描边。BoxDecoration 自带不了渐变边框，只能自己实现一个 BoxBorder：
+/// 用渐变 shader 沿圆角路径描一圈。
+class GradientBorder extends BoxBorder {
+  final List<Color> colors;
+  final double width;
+  final double radius;
+  const GradientBorder({
+    required this.colors,
+    this.width = 1,
+    this.radius = 14,
+  });
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.all(width);
+
+  @override
+  bool get isUniform => true;
+
+  @override
+  BorderSide get top => BorderSide(color: colors.first, width: width);
+
+  @override
+  BorderSide get bottom => BorderSide(color: colors.last, width: width);
+
+  @override
+  GradientBorder scale(double t) =>
+      GradientBorder(colors: colors, width: width * t, radius: radius * t);
+
+  @override
+  void paint(
+    Canvas canvas,
+    Rect rect, {
+    TextDirection? textDirection,
+    BoxShape shape = BoxShape.rectangle,
+    BorderRadius? borderRadius,
+  }) {
+    final br = borderRadius ?? BorderRadius.circular(radius);
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: colors,
+      ).createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width;
+    canvas.drawRRect(br.toRRect(rect).deflate(width / 2), paint);
+  }
+}
+
+/// 渐变文字。给主数值用：同一行数字从左到右换色，比纯色多一层"电子的味道"。
 ///
-/// 放在 Scaffold 之上、内容之下，不拦点击。alpha 压得很低（.22）—— 网格是氛围，
-/// 一旦能看清楚就会和数据抢注意力，卡片边缘也会显得毛糙。
+/// 注意它内部会 saveLayer，外面的 blur 阴影会被这一层裁掉，
+/// 所以渐变数字不要挂大半径阴影 —— 要光晕的话在背后垫一层径向渐变。
+class GradientText extends StatelessWidget {
+  final Widget child;
+  final List<Color> colors;
+  final bool horizontal;
+  const GradientText({
+    super.key,
+    required this.child,
+    required this.colors,
+    this.horizontal = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (rect) => LinearGradient(
+        begin: horizontal ? Alignment.centerLeft : Alignment.topCenter,
+        end: horizontal ? Alignment.centerRight : Alignment.bottomCenter,
+        colors: colors,
+      ).createShader(rect),
+      child: child,
+    );
+  }
+}
+
+/// 背景板：渐变底 + 装饰纹。只负责"氛围"，不拦点击，也不放任何数据。
 class ThemeBackdrop extends StatelessWidget {
   final Widget child;
   const ThemeBackdrop({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    if (!AppColors.grid) return child;
+    final grad = AppColors.bgGrad;
+    final deco = AppColors.deco;
+    // 纯色 + 无装饰就直接放行，省一层 Stack
+    if (grad == null && deco == Deco.none) return child;
     return Stack(
       children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: CustomPaint(
-              painter: _GridPainter(AppColors.line.withValues(alpha: .22)),
+        if (grad != null)
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: grad,
+                ),
+              ),
             ),
           ),
-        ),
+        if (deco != Deco.none)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _DecoPainter(
+                  deco,
+                  AppColors.line.withValues(alpha: deco == Deco.scan ? .16 : .22),
+                  AppColors.accent.withValues(alpha: .10),
+                ),
+              ),
+            ),
+          ),
         Positioned.fill(child: child),
       ],
     );
   }
 }
 
-class _GridPainter extends CustomPainter {
+class _DecoPainter extends CustomPainter {
+  final Deco deco;
   final Color color;
-  _GridPainter(this.color);
+  final Color tint;
+  _DecoPainter(this.deco, this.color, this.tint);
 
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
       ..color = color
       ..strokeWidth = .8;
-    const step = 32.0;
-    for (var x = step; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
-    }
-    for (var y = step; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+    switch (deco) {
+      case Deco.grid:
+        const step = 32.0;
+        for (var x = step; x < size.width; x += step) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
+        }
+        for (var y = step; y < size.height; y += step) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+        }
+      case Deco.dots:
+        const gap = 24.0;
+        final dot = Paint()..color = color;
+        for (var y = gap; y < size.height; y += gap) {
+          for (var x = gap; x < size.width; x += gap) {
+            canvas.drawCircle(Offset(x, y), 1.1, dot);
+          }
+        }
+      case Deco.scan:
+        // CRT 扫描线：4px 一道，极淡；再在顶部压一层主色光带
+        for (var y = 0.0; y < size.height; y += 4) {
+          canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+        }
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, size.width, size.height * .35),
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [tint, tint.withValues(alpha: 0)],
+            ).createShader(
+              Rect.fromLTWH(0, 0, size.width, size.height * .35),
+            ),
+        );
+      case Deco.none:
+        break;
     }
   }
 
   @override
-  bool shouldRepaint(_GridPainter old) => old.color != color;
+  bool shouldRepaint(_DecoPainter old) =>
+      old.deco != deco || old.color != color || old.tint != tint;
 }
 
 class SectionCard extends StatelessWidget {
@@ -411,11 +703,7 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppColors.radius),
-        border: Border.all(color: AppColors.hairline),
-      ),
+      decoration: AppColors.cardBox(),
       padding: padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -457,11 +745,7 @@ class BigTile extends StatelessWidget {
     final color = AppColors.tone(metric.tone);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppColors.radius),
-        border: Border.all(color: AppColors.line),
-      ),
+      decoration: AppColors.cardBox(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,

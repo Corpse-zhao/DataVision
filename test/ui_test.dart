@@ -299,12 +299,29 @@ void main() {
   });
 
   group('主题', () {
-    test('内置五套，id 唯一，深浅各半', () {
+    test('内置八套，id / 名字都不重复', () {
       final all = AppPalettes.all;
-      expect(all.length, 5);
-      expect(all.map((p) => p.id).toSet().length, 5);
-      expect(all.map((p) => p.name).toSet().length, 5);
-      expect(all.where((p) => p.brightness == Brightness.dark).length, 3);
+      expect(all.length, 8);
+      expect(all.map((p) => p.id).toSet().length, 8);
+      expect(all.map((p) => p.name).toSet().length, 8);
+      expect(all.where((p) => p.brightness == Brightness.dark).length, 5);
+      // 每套都得有区别于别人的地方：要么深/浅不同，要么有渐变、发光、装饰
+      expect(
+        all.where((p) => p.bgGrad != null || p.accentGrad != null).length,
+        greaterThanOrEqualTo(3),
+      );
+    });
+
+    test('老主题 id 能平滑接到新主题上', () {
+      // 「强光」重做过一版，id 从 daylight 换成 stronglight
+      expect(AppPalettes.byId('daylight').id, 'stronglight');
+    });
+
+    test('渐变主题的顶栏/底栏跟着渐变走，不会出现接缝', () {
+      for (final p in AppPalettes.all) {
+        expect(p.chrome, p.bgGrad?.first ?? p.bg, reason: p.id);
+        expect(p.navSurface, p.bgGrad?.last ?? p.card, reason: p.id);
+      }
     });
 
     test('未知 id 回落到浅色，不会崩', () {
@@ -349,27 +366,42 @@ void main() {
         const Size(390, 1400),
       );
 
-      // 缩略图是横向滚动的：先看得到的前四套，最后一套拖出来
-      for (final p in AppPalettes.all.take(4)) {
+      // 缩略图是横向滚动的：先看得到前几套，最后一套要拖出来
+      for (final p in AppPalettes.all.take(3)) {
         expect(find.text(p.name), findsOneWidget);
       }
-      expect(find.text(AppPalettes.daylight.name), findsNothing);
+      expect(find.text(AppPalettes.aurora.name), findsNothing);
       // 外层是竖向列表，主题条是里面的横向 ListView
-      await tester.drag(find.byType(ListView).at(1), const Offset(-200, 0));
+      await tester.drag(find.byType(ListView).at(1), const Offset(-600, 0));
       await tester.pump();
-      expect(find.text(AppPalettes.daylight.name), findsOneWidget);
-      // 拖回去，保证「夜色」在可点范围内
-      await tester.drag(find.byType(ListView).at(1), const Offset(200, 0));
-      await tester.pump();
+      expect(find.text(AppPalettes.aurora.name), findsOneWidget);
 
-      await tester.tap(find.text('夜色'));
+      // 就地点头最后一套（拖到最右后它整块都在可视区内）
+      await tester.tap(find.text(AppPalettes.aurora.name));
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(tester.takeException(), isNull);
-      expect(AppThemeManager.instance.id, 'midnight');
-      expect(prefs.themeId, 'midnight');
-      expect(AppColors.bg, AppPalettes.midnight.bg);
+      expect(AppThemeManager.instance.id, 'aurora');
+      expect(prefs.themeId, 'aurora');
+      expect(AppColors.bg, AppPalettes.aurora.bg);
 
+      AppThemeManager.instance.restore('classic');
+    });
+
+    testWidgets('八套主题逐个渲染都不溢出（含渐变数字）', (tester) async {
+      feedController();
+      feedBms();
+      for (final p in AppPalettes.all) {
+        for (final size in const [Size(390, 844), Size(360, 600)]) {
+          AppThemeManager.instance.restore(p.id);
+          await pumpAt(tester, DataPage(ctrl: ctrl, bms: bms), size);
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '${p.name} @ ${size.width}x${size.height}',
+          );
+        }
+      }
       AppThemeManager.instance.restore('classic');
     });
 

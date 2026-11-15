@@ -196,11 +196,7 @@ class _CardFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final bandH = band == null ? 0.0 : _bandH + 10;
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppColors.radius),
-        border: Border.all(color: AppColors.hairline),
-      ),
+      decoration: AppColors.cardBox(),
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
         builder: (context, box) {
@@ -386,7 +382,56 @@ class _BandCell extends StatelessWidget {
     final scale = AppColors.numberScale;
     final main = t.primary ? 23.0 : 19.0;
     final tint = t.primary ? AppColors.accent : AppColors.inkSoft;
-    return Padding(
+    final grad = t.primary ? AppColors.accentGrad : null;
+
+    Widget number = Text.rich(
+      TextSpan(
+        text: t.value,
+        children: [
+          if (t.unit.isNotEmpty)
+            TextSpan(
+              text: ' ${t.unit}',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                color: t.primary
+                    ? AppColors.accent.withValues(alpha: .7)
+                    : AppColors.inkSoft,
+              ),
+            ),
+        ],
+      ),
+      maxLines: 1,
+      style: AppTheme.mono.copyWith(
+        fontSize: main * scale,
+        height: 1,
+        fontWeight: t.primary ? FontWeight.w700 : FontWeight.w600,
+        letterSpacing: -.4,
+        color: t.color ?? AppColors.ink,
+        // 渐变数字走 ShaderMask，阴影会被那层裁掉，所以光晕改用背后的径向底
+        shadows: t.primary && grad == null
+            ? AppColors.glowFor(strong: true)
+            : null,
+      ),
+    );
+    if (grad != null) {
+      number = GradientText(colors: grad, child: number);
+    }
+
+    return Container(
+      // 渐变主题里给主指标垫一层径向主色，代替被裁掉的文字光晕
+      decoration: t.primary && grad != null
+          ? BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(-.35, .55),
+                radius: 1.15,
+                colors: [
+                  AppColors.accent.withValues(alpha: AppColors.isDark ? .16 : .07),
+                  AppColors.accent.withValues(alpha: 0),
+                ],
+              ),
+            )
+          : null,
       padding: const EdgeInsets.symmetric(horizontal: 7),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -415,33 +460,7 @@ class _BandCell extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.bottomLeft,
-                child: Text.rich(
-                  TextSpan(
-                    text: t.value,
-                    children: [
-                      if (t.unit.isNotEmpty)
-                        TextSpan(
-                          text: ' ${t.unit}',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w500,
-                            color: t.primary
-                                ? AppColors.accent.withValues(alpha: .7)
-                                : AppColors.inkSoft,
-                          ),
-                        ),
-                    ],
-                  ),
-                  maxLines: 1,
-                  style: AppTheme.mono.copyWith(
-                    fontSize: main * scale,
-                    height: 1,
-                    fontWeight: t.primary ? FontWeight.w700 : FontWeight.w600,
-                    letterSpacing: -.4,
-                    color: t.color ?? AppColors.ink,
-                    shadows: t.primary ? AppColors.glowFor(strong: true) : null,
-                  ),
-                ),
+                child: number,
               ),
             ),
           ),
@@ -766,6 +785,7 @@ class _SparkArea extends StatelessWidget {
             painter: _SparkPainter(
               trend.values,
               AppColors.accent,
+              grad: AppColors.accentGrad,
               grid: AppColors.gridLine,
               base: AppColors.hairline,
             ),
@@ -807,9 +827,16 @@ void _dash(Canvas canvas, Offset a, Offset b, Paint p, {double on = 3, double of
 class _SparkPainter extends CustomPainter {
   final List<double> pts;
   final Color color;
+  final List<Color>? grad;
   final Color grid;
   final Color base;
-  _SparkPainter(this.pts, this.color, {required this.grid, required this.base});
+  _SparkPainter(
+    this.pts,
+    this.color, {
+    this.grad,
+    required this.grid,
+    required this.base,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -873,20 +900,27 @@ class _SparkPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [color.withValues(alpha: .22), color.withValues(alpha: .01)],
+          colors: [
+            (grad?.first ?? color).withValues(alpha: .22),
+            (grad?.first ?? color).withValues(alpha: .01),
+          ],
         ).createShader(Rect.fromLTWH(0, 0, w, h))
         ..style = PaintingStyle.fill,
     );
 
-    canvas.drawPath(
-      line,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8
-        ..strokeJoin = StrokeJoin.round
-        ..strokeCap = StrokeCap.round,
-    );
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    if (grad != null) {
+      stroke.shader = LinearGradient(
+        colors: grad!,
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+    } else {
+      stroke.color = color;
+    }
+    canvas.drawPath(line, stroke);
 
     // 末端游标：竖虚线到基线 + 双层光点，一眼看出「现在就是这个值」
     final lastX = dx * (pts.length - 1);    final lastY = yOf(pts.last);
@@ -910,6 +944,7 @@ class _SparkPainter extends CustomPainter {
   bool shouldRepaint(_SparkPainter old) =>
       old.pts.length != pts.length ||
       old.color != color ||
+      old.grad != grad ||
       (pts.isNotEmpty && (old.pts.isEmpty || old.pts.last != pts.last));
 }
 

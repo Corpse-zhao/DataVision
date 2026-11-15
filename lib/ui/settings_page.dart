@@ -35,6 +35,22 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  /// 主题条是横向滚动的，套数多了以后当前选中的那套很可能在屏幕外，
+  /// 一进来就把它滚到眼前，否则用户找不到「我现在用的是哪个」。
+  late final ScrollController _themeScroll = ScrollController(
+    initialScrollOffset:
+        AppPalettes.all.indexWhere(
+              (p) => p.id == AppThemeManager.instance.id,
+            ) *
+            100.0,
+  );
+
+  @override
+  void dispose() {
+    _themeScroll.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.prefs;
@@ -100,6 +116,7 @@ class _SettingsPageState extends State<SettingsPage> {
               SizedBox(
                 height: 112,
                 child: ListView.separated(
+                  controller: _themeScroll,
                   scrollDirection: Axis.horizontal,
                   padding: EdgeInsets.zero,
                   itemCount: AppPalettes.all.length,
@@ -384,8 +401,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-/// 主题缩略图：左下角的迷你「数据卡」，用该主题自己的配色画，
-/// 一眼能看出底色深浅和主色。
+/// 主题缩略图：一张迷你「数据卡」，用该主题自己的配色画。
+///
+/// 渐变主题必须把渐变也画出来（底色 + 数字上色），否则一圈缩略图里
+/// 霓虹和极光看起来只是两块深色方块，选不出区别。
 class _ThemeSwatch extends StatelessWidget {
   final AppPalette palette;
   final bool selected;
@@ -399,109 +418,147 @@ class _ThemeSwatch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = palette;
+    final bgGrad = t.bgGrad;
+    final numGrad = t.accentGrad;
+
+    Widget number = Text(
+      '42.6',
+      style: AppTheme.mono.copyWith(
+        fontSize: 16,
+        height: 1.0,
+        fontWeight: FontWeight.w700,
+        color: t.accent,
+        shadows: t.glow
+            ? [
+                Shadow(
+                  color: t.accent.withValues(alpha: .45),
+                  blurRadius: 10,
+                ),
+              ]
+            : null,
+      ),
+    );
+    if (numGrad != null) {
+      number = GradientText(colors: numGrad, child: number);
+    }
+
     return SizedBox(
       width: 92,
-      child: Material(
-        color: t.bg,
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: selected ? t.accent : AppColors.line,
-                width: selected ? 1.8 : 1,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: bgGrad == null ? t.bg : null,
+                  gradient: bgGrad == null
+                      ? null
+                      : LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: bgGrad,
+                        ),
+                ),
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: t.card,
-                      borderRadius: BorderRadius.circular(5),
-                      border: Border.all(color: t.line, width: .8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          width: 18,
-                          height: 3,
-                          decoration: BoxDecoration(
-                            color: t.inkSoft.withValues(alpha: .55),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        Text(
-                          '42.6',
-                          style: AppTheme.mono.copyWith(
-                            fontSize: 16,
-                            height: 1.0,
-                            fontWeight: FontWeight.w700,
-                            color: t.accent,
-                            shadows: t.glow
-                                ? [
-                                    Shadow(
-                                      color: t.accent.withValues(alpha: .45),
-                                      blurRadius: 10,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            for (final c in [t.good, t.warn, t.bad])
-                              Padding(
-                                padding: const EdgeInsets.only(right: 3),
-                                child: Container(
-                                  width: 9,
-                                  height: 3,
-                                  decoration: BoxDecoration(
-                                    color: c,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected ? t.accent : t.line,
+                      width: selected ? 1.8 : 1,
                     ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (selected) ...[
-                      Icon(Icons.check_circle, size: 10, color: t.accent),
-                      const SizedBox(width: 2),
-                    ],
-                    Text(
-                      t.name,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: selected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: selected ? t.accent : t.ink,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: t.cardTop == null ? t.card : null,
+                            gradient: t.cardTop == null
+                                ? null
+                                : LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [t.cardTop!, t.cardBottom ?? t.cardTop!],
+                                  ),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(color: t.line, width: .8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
+                                width: 18,
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: t.inkSoft.withValues(alpha: .55),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              number,
+                              Row(
+                                children: [
+                                  for (final c in [t.good, t.warn, t.bad])
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 3),
+                                      child: Container(
+                                        width: 9,
+                                        height: 3,
+                                        decoration: BoxDecoration(
+                                          color: c,
+                                          borderRadius: BorderRadius.circular(2),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (selected) ...[
+                            Icon(Icons.check_circle, size: 10, color: t.accent),
+                            const SizedBox(width: 2),
+                          ],
+                          Flexible(
+                            child: Text(
+                              t.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: selected ? t.accent : t.ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
