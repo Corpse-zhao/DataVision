@@ -11,6 +11,7 @@ import 'package:datavision/core/prefs.dart';
 import 'package:datavision/drivers/jk_bms.dart';
 import 'package:datavision/drivers/lingbo.dart';
 import 'package:datavision/drivers/registry.dart';
+import 'package:datavision/ui/console_page.dart';
 import 'package:datavision/ui/data_page.dart';
 import 'package:datavision/ui/settings_page.dart';
 import 'package:datavision/ui/theme.dart';
@@ -29,7 +30,12 @@ void main() {
 
   setUpAll(() async {
     await loadFont('Microsoft YaHei', r'C:\Windows\Fonts\simhei.ttf');
-    await loadFont('Consolas', r'C:\Windows\Fonts\consola.ttf');
+    // 图标字体：测试环境默认没有 MaterialIcons，不加载的话所有 Icon 都是方框，
+    // 预览图就没法用来判断版面（会误以为界面坏了）
+    await loadFont(
+      'MaterialIcons',
+      r'C:\flutter\bin\cache\artifacts\material_fonts\materialicons-regular.otf',
+    );
   });
 
   late Prefs prefs;
@@ -125,4 +131,41 @@ void main() {
 
   testWidgets('shot settings classic', (tester) async => shotSettings(tester, AppPalettes.classic));
   testWidgets('shot settings hud', (tester) async => shotSettings(tester, AppPalettes.hud));
+
+  /// 数据台：表格 + 原始帧，换主题后要确认没被版式改动带歪
+  Future<void> shotConsole(WidgetTester tester, AppPalette pal) async {
+    AppThemeManager.instance.restore(pal.id);
+    tester.view.physicalSize = const Size(390, 844) * 2;
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.of(pal),
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: ThemeBackdrop(child: ConsolePage(ctrl: ctrl, bms: bms)),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 60));
+    expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('shots/console_${pal.id}.png'),
+    );
+  }
+
+  testWidgets('shot console classic', (tester) async {
+    await shotConsole(tester, AppPalettes.classic);
+  });
+
+  /// 空态：新装的用户第一眼看到的样子（两台都没连）
+  testWidgets('shot empty', (tester) async {
+    ctrl.driver = null;
+    bms.driver = null;
+    AppThemeManager.instance.restore(AppPalettes.classic.id);
+    tester.view.physicalSize = const Size(390, 844) * 2;
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(app(AppPalettes.classic, const Size(390, 844)));
+    await tester.pump(const Duration(milliseconds: 60));
+    expectLater(find.byType(MaterialApp), matchesGoldenFile('shots/empty.png'));
+  });
 }

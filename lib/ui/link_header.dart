@@ -135,65 +135,78 @@ class EmptyHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SectionCard(
-      child: Column(
-        children: [
-          const SizedBox(height: 18),
-          Icon(icon, size: 42, color: AppColors.inkSoft.withValues(alpha: .5)),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12.5,
-              color: AppColors.inkSoft,
-              height: 1.5,
-            ),
-          ),
-          if (note != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.cardAlt,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.line),
+      fill: true,
+      // 卡片本身有整屏高度，内容要垂直居中；否则两块内容都贴顶，
+      // 卡片下半截会空出一大片，看着像没渲染完
+      child: Align(
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 4),
+            Icon(icon, size: 40, color: AppColors.inkSoft.withValues(alpha: .45)),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
-              child: Text(
-                note!,
-                textAlign: TextAlign.left,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.inkSoft,
-                  height: 1.6,
+            ),
+            const SizedBox(height: 7),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: AppColors.inkSoft,
+                height: 1.55,
+              ),
+            ),
+            if (note != null) ...[
+              const SizedBox(height: 11),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.cardAlt,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.hairline),
+                ),
+                child: Text(
+                  note!,
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.inkSoft,
+                    height: 1.6,
+                  ),
                 ),
               ),
-            ),
+            ],
+            const SizedBox(height: 16),
+            if (connected)
+              OutlinedButton.icon(
+                onPressed: () => link.reconnectNow(),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('重新连接'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: () async {
+                  await link.startScan();
+                  if (context.mounted) showDeviceSheet(context, link);
+                },
+                icon: const Icon(Icons.search, size: 18),
+                label: const Text('搜索设备'),
+              ),
+            const SizedBox(height: 4),
           ],
-          const SizedBox(height: 14),
-          if (connected)
-            OutlinedButton.icon(
-              onPressed: () => link.reconnectNow(),
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('重新连接'),
-            )
-          else
-            FilledButton.icon(
-              onPressed: () async {
-                await link.startScan();
-                if (context.mounted) showDeviceSheet(context, link);
-              },
-              icon: const Icon(Icons.search, size: 18),
-              label: const Text('搜索设备'),
-            ),
-          const SizedBox(height: 10),
-        ],
+        ),
       ),
     );
   }

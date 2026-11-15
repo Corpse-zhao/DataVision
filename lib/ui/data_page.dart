@@ -160,78 +160,141 @@ String brandOf(String? driverName, String fallback) {
 
 // MARK: - 卡片外框
 
-/// 白卡片：标题行 + 正文 + 通栏页脚。
-/// 正文拿到的是「剩余可用高度」，由各卡片自己决定把富余塞给谁（走势图/柱形图），
-/// 这样卡片不会出现整块空白，也不会因为内容放不下而溢出。
+/// 卡片：标题带 + 通栏指标条 + 正文 + 通栏页脚。
+///
+/// 标题带的信息按权重分三层：状态点（最响）→ 设备类名（中黑）→ 品牌（小灰）。
+/// 之前三者挤在一行同字号里，扫一眼分不出「这是控制器」还是「这是凌博」。
+///
+/// 指标条做成**通栏**（出血到卡片左右边）而不是缩进的一块：
+/// 缩进条里的字会比下面一行字多缩进 16px，两行左边缘对不上，整卡都在"歪"。
+/// 出血之后条内文字正好落在 14px 版心线上，与正文严格对齐。
 class _CardFrame extends StatelessWidget {
   final Color dot;
   final String title;
+  final String? brand;
   final Widget? trailing;
+  final Widget? band;
   final Widget Function(double bodyH) body;
   final Widget? footer;
 
   const _CardFrame({
     required this.dot,
     required this.title,
+    this.brand,
     this.trailing,
+    this.band,
     required this.body,
     this.footer,
   });
 
-  static const _headH = 15.0;
-  static const _footerH = 26.0;
+  static const _headH = 19.0;
+  static const _bandH = 64.0;
+  static const _footerH = 34.0;
+  static const _padH = 14.0;
 
   @override
   Widget build(BuildContext context) {
+    final bandH = band == null ? 0.0 : _bandH + 10;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppColors.radius),
+        border: Border.all(color: AppColors.hairline),
       ),
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
         builder: (context, box) {
           final bodyH = math.max(
             0.0,
-            box.maxHeight - _headH - 8 - (footer == null ? 0 : _footerH) - 16,
+            box.maxHeight -
+                _headH -
+                11 -
+                (footer == null ? 0 : _footerH + .5) -
+                (band == null ? 9.5 : bandH) -
+                20,
           );
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(11, 9, 11, 0),
+                padding: const EdgeInsets.fromLTRB(_padH, 11, _padH - 4, 0),
                 child: SizedBox(
                   height: _headH,
                   child: Row(
                     children: [
                       Container(
-                        width: 5,
-                        height: 5,
+                        width: 6,
+                        height: 6,
                         decoration: BoxDecoration(
                           color: dot,
                           shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: dot.withValues(alpha: .45),
+                              blurRadius: 6,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: AppColors.inkSoft,
+                      const SizedBox(width: 7),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .2,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      if (brand != null && brand!.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            brand!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              height: 1,
+                              color: AppColors.inkSoft,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
+                      const Spacer(),
                       ?trailing,
                     ],
                   ),
                 ),
               ),
+              if (band == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 9),
+                  child: Container(height: .5, color: AppColors.line),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Container(
+                    height: _bandH,
+                    padding: const EdgeInsets.symmetric(horizontal: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardAlt,
+                      border: Border(
+                        top: BorderSide(color: AppColors.hairline, width: .5),
+                        bottom: BorderSide(
+                          color: AppColors.hairline,
+                          width: .5,
+                        ),
+                      ),
+                    ),
+                    child: band,
+                  ),
+                ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(11, 8, 11, 7),
+                  padding: const EdgeInsets.fromLTRB(_padH, 10, _padH, 10),
                   child: body(bodyH),
                 ),
               ),
@@ -239,11 +302,12 @@ class _CardFrame extends StatelessWidget {
                 Container(
                   height: _footerH,
                   decoration: BoxDecoration(
+                    color: AppColors.cardAlt,
                     border: Border(
-                      top: BorderSide(color: AppColors.line, width: .5),
+                      top: BorderSide(color: AppColors.hairline, width: .5),
                     ),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  padding: const EdgeInsets.symmetric(horizontal: _padH),
                   alignment: Alignment.center,
                   child: footer,
                 ),
@@ -255,8 +319,9 @@ class _CardFrame extends StatelessWidget {
   }
 }
 
-// MARK: - 格子
+// MARK: - 指标条
 
+/// 一个指标：标签 + 数值 + 单位。
 class _Tile {
   final String label;
   final String value;
@@ -264,109 +329,118 @@ class _Tile {
 
   /// null 表示跟随主题的字色（主题是运行时切的，不能写进 const 默认值）
   final Color? color;
-  final bool highlight;
-  final bool small;
+
+  /// 主指标：整张卡只给一个。主指标用主题色 + 大一号 + 更强的光晕，
+  /// 其余一律退回墨色 —— 八个数字全是重点等于没有重点。
+  final bool primary;
+
   const _Tile({
     required this.label,
     required this.value,
     required this.unit,
     this.color,
-    this.highlight = false,
-    this.small = false,
+    this.primary = false,
   });
 
-  factory _Tile.of(Metric m, {bool highlight = false, bool small = false}) =>
-      _Tile(
-        label: m.label,
-        value: m.value,
-        unit: m.unit,
-        color: highlight ? AppColors.accent : AppColors.tone(m.tone),
-        highlight: highlight,
-        small: small,
-      );
+  factory _Tile.of(Metric m, {bool primary = false}) => _Tile(
+    label: m.label,
+    value: m.value,
+    unit: m.unit,
+    color: primary ? AppColors.accent : AppColors.tone(m.tone),
+    primary: primary,
+  );
 }
 
-class _MetricGrid extends StatelessWidget {
+/// 主指标条的内容：四格等分 + 三根竖细分隔。
+///
+/// 四个各自带底的方块会读成「四个按钮」，一整条铺底才读成「一块仪表」。
+/// 底和上下细线由 [_CardFrame.band] 提供（要通栏），这里只管排布。
+class _MetricBand extends StatelessWidget {
   final List<_Tile> tiles;
-  const _MetricGrid({required this.tiles});
-
-  /// 一行固定 4 格：格子小、行数固定，横竖屏都用同一套排法
-  static const cols = 4;
+  const _MetricBand({required this.tiles});
 
   @override
   Widget build(BuildContext context) {
     if (tiles.isEmpty) return const SizedBox.shrink();
-    return LayoutBuilder(
-      builder: (context, box) {
-        const gap = 6.0;
-        final w = (box.maxWidth - gap * (cols - 1)) / cols;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final t in tiles) SizedBox(width: w, child: _TileBox(t)),
-          ],
-        );
-      },
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i > 0)
+            Center(
+              child: Container(width: .5, height: 30, color: AppColors.hairline),
+            ),
+          Expanded(child: _BandCell(tiles[i])),
+        ],
+      ],
     );
   }
 }
 
-class _TileBox extends StatelessWidget {
+class _BandCell extends StatelessWidget {
   final _Tile t;
-  const _TileBox(this.t);
+  const _BandCell(this.t);
 
   @override
   Widget build(BuildContext context) {
-    final labelColor = t.highlight ? AppColors.accent : AppColors.inkSoft;
     final scale = AppColors.numberScale;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 7),
-      decoration: BoxDecoration(
-        color: t.highlight
-            ? AppColors.accent.withValues(alpha: AppColors.isDark ? .14 : .08)
-            : AppColors.cardAlt,
-        borderRadius: BorderRadius.circular(8),
-      ),
+    final main = t.primary ? 23.0 : 19.0;
+    final tint = t.primary ? AppColors.accent : AppColors.inkSoft;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             t.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, height: 1.2, color: labelColor),
+            style: TextStyle(
+              fontSize: 10,
+              height: 1.1,
+              letterSpacing: .3,
+              fontWeight: t.primary ? FontWeight.w600 : FontWeight.w400,
+              color: t.primary ? tint.withValues(alpha: .9) : tint,
+            ),
           ),
-          const SizedBox(height: 3),
-          // 窄屏（360）一行四格时 "3200rpm" 会顶出去，按比例缩而不是打省略号
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text.rich(
-                TextSpan(
-                  text: t.value,
-                  children: [
-                    if (t.unit.isNotEmpty)
-                      TextSpan(
-                        text: t.unit,
-                        style: TextStyle(
-                          fontSize: t.small ? 10.5 : 11,
-                          fontWeight: FontWeight.w500,
-                          color: t.highlight
-                              ? AppColors.accent.withValues(alpha: .65)
-                              : AppColors.inkSoft,
+          const SizedBox(height: 5),
+          // 固定高度的底对齐槽：主次字号不同，只有按底对齐（数字无下伸部，
+          // 视觉底边就是基线）四个数才会齐平，否则会像浪一样上下错
+          SizedBox(
+            height: 29,
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              // 窄屏（360）一行四格时 "3200rpm" 会顶出去，按比例缩而不是打省略号
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.bottomLeft,
+                child: Text.rich(
+                  TextSpan(
+                    text: t.value,
+                    children: [
+                      if (t.unit.isNotEmpty)
+                        TextSpan(
+                          text: ' ${t.unit}',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            color: t.primary
+                                ? AppColors.accent.withValues(alpha: .7)
+                                : AppColors.inkSoft,
+                          ),
                         ),
-                      ),
-                  ],
-                ),
-                maxLines: 1,
-                style: AppTheme.mono.copyWith(
-                  fontSize: (t.small ? 13.5 : 19) * scale,
-                  height: 1.0,
-                  fontWeight: FontWeight.w600,
-                  color: t.color ?? AppColors.ink,
-                  shadows: AppColors.numberGlow,
+                    ],
+                  ),
+                  maxLines: 1,
+                  style: AppTheme.mono.copyWith(
+                    fontSize: main * scale,
+                    height: 1,
+                    fontWeight: t.primary ? FontWeight.w700 : FontWeight.w600,
+                    letterSpacing: -.4,
+                    color: t.color ?? AppColors.ink,
+                    shadows: t.primary ? AppColors.glowFor(strong: true) : null,
+                  ),
                 ),
               ),
             ),
@@ -377,14 +451,21 @@ class _TileBox extends StatelessWidget {
   }
 }
 
-/// 页脚四格：标签在上、数值在下，没有底色，视觉上比格子轻
+/// 次级指标行：标签在上、数值在下，没有底色，视觉上比主指标条轻一档。
 class _FootRow extends StatelessWidget {
   final List<(String, String, String)> items; // (标签, 数值, 单位)
-  const _FootRow(this.items);
+  final double valueSize;
+  final double labelSize;
+  const _FootRow(
+    this.items, {
+    this.valueSize = 12.5,
+    this.labelSize = 10.5,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final it in items)
           Expanded(
@@ -397,12 +478,12 @@ class _FootRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10.5,
+                    fontSize: labelSize,
                     height: 1.1,
                     color: AppColors.inkSoft,
                   ),
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 3),
                 Text.rich(
                   TextSpan(
                     text: it.$2,
@@ -411,7 +492,7 @@ class _FootRow extends StatelessWidget {
                         TextSpan(
                           text: it.$3,
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: valueSize - 2.5,
                             fontWeight: FontWeight.w500,
                             color: AppColors.inkSoft,
                           ),
@@ -421,8 +502,8 @@ class _FootRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTheme.mono.copyWith(
-                    fontSize: 12,
-                    height: 1.0,
+                    fontSize: valueSize,
+                    height: 1,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -434,6 +515,7 @@ class _FootRow extends StatelessWidget {
   }
 }
 
+/// 小节标题：小字 + 一条通到右边的细线，用来把「图」和「数值」分开而不加框
 class _SectionGap extends StatelessWidget {
   final String text;
   final Widget? trailing;
@@ -443,11 +525,50 @@ class _SectionGap extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(text, style: TextStyle(fontSize: 11, color: AppColors.inkSoft)),
-        const SizedBox(width: 6),
-        const Expanded(child: Divider(height: 1, thickness: .5)),
-        if (trailing != null) ...[const SizedBox(width: 6), trailing!],
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 10.5,
+            height: 1.2,
+            letterSpacing: .3,
+            color: AppColors.inkSoft,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(height: .5, color: AppColors.hairline),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
       ],
+    );
+  }
+}
+
+/// 标题带右侧的小状态标签。比 StatusPill 小一号，只用来放「运行正常 / 均衡待机」
+class _MiniTag extends StatelessWidget {
+  final String text;
+  final Color color;
+  const _MiniTag(this.text, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: AppColors.isDark ? .16 : .10),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.1,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
     );
   }
 }
@@ -486,41 +607,42 @@ class _ControllerCard extends StatelessWidget {
 
     final tiles = <_Tile>[
       for (var i = 0; i < primary.length && i < 4; i++)
-        _Tile.of(primary[i], highlight: i == powerIdx),
+        _Tile.of(primary[i], primary: i == powerIdx),
     ];
-    final smallTiles = [for (final m in secondary) _Tile.of(m, small: true)];
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _showAllMetrics(context, link, '控制器全部数据'),
       child: _CardFrame(
         dot: AppColors.accent,
-        title: '${brandOf(link.driver?.name, '控制器')} · 控制器',
-        trailing: Text(
+        title: '控制器',
+        brand: brandOf(link.driver?.name, '未识别'),
+        trailing: _MiniTag(
           fault != null ? '故障' : (online ? '运行正常' : '等数据'),
-          style: TextStyle(
-            fontSize: 11,
-            color: fault != null
-                ? AppColors.bad
-                : (online ? AppColors.good : AppColors.inkSoft),
-          ),
+          fault != null
+              ? AppColors.bad
+              : (online ? AppColors.good : AppColors.inkSoft),
         ),
+        band: _MetricBand(tiles: tiles),
         body: (h) {
           // 卡太扁（横屏或小屏）时，第二行指标让位给走势图
-          final showSecondary = smallTiles.isNotEmpty && h > 235;
+          final showSecondary = secondary.isNotEmpty && h > 140;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (fault != null)
+              if (fault != null) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
+                    horizontal: 9,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.bad.withValues(alpha: .07),
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.bad.withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(
+                      color: AppColors.bad.withValues(alpha: .25),
+                      width: .5,
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -529,7 +651,7 @@ class _ControllerCard extends StatelessWidget {
                         size: 14,
                         color: AppColors.bad,
                       ),
-                      const SizedBox(width: 5),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           fault,
@@ -545,35 +667,62 @@ class _ControllerCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              _MetricGrid(tiles: tiles),
-              if (showSecondary) _MetricGrid(tiles: smallTiles),
-              // 限高 122：图不至于比格子高出一大截，剩下的余量由板块间距平均分掉
-              Flexible(
-                child: SizedBox(
-                  height: 122,
-                  child: _SparkArea(trend: trend, frames: link.frameCount),
-                ),
-              ),
+                const SizedBox(height: 9),
+              ],
+              if (showSecondary) ...[
+                const SizedBox(height: 11),
+                _FootRow([
+                  for (final m in secondary) (m.label, m.value, m.unit),
+                ], valueSize: 14, labelSize: 10),
+              ],
+              const SizedBox(height: 12),
+              // 图吃掉剩下的全部高度：图比格子高得越多越像仪表，不像表格
+              Expanded(child: _SparkArea(trend: trend, frames: link.frameCount)),
             ],
           );
         },
-        footer: Row(
-          children: [
-            Expanded(
-              child: Text(
-                '协议 ${link.driver?.name ?? '嗅探中'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
-              ),
-            ),
-            Text(
-              '${thousands(link.frameCount)} 帧',
-              style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
-            ),
-          ],
+        footer: _ProtocolFooter(
+          name: link.driver?.name ?? '嗅探中',
+          frames: link.frameCount,
         ),
       ),
+    );
+  }
+}
+
+/// 页脚：左边协议名、右边帧计数。两段都是"这条链路现在什么情况"的元信息，
+/// 不需要图标 —— 12px 的小图标在这个尺寸只会糊成一团。
+class _ProtocolFooter extends StatelessWidget {
+  final String name;
+  final int frames;
+  const _ProtocolFooter({required this.name, required this.frames});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          '协议',
+          style: TextStyle(
+            fontSize: 10,
+            color: AppColors.inkSoft.withValues(alpha: .7),
+            letterSpacing: .3,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10.5, color: AppColors.inkSoft),
+          ),
+        ),
+        Text(
+          '${thousands(frames)} 帧',
+          style: AppTheme.mono.copyWith(fontSize: 10.5, color: AppColors.inkSoft),
+        ),
+      ],
     );
   }
 }
@@ -605,19 +754,30 @@ class _SparkArea extends StatelessWidget {
             curve
                 ? '峰 ${fmt(trend.peak)} · 均 ${fmt(trend.average)}'
                 : (noPowerField ? '该协议不上报功率' : '等曲线'),
-            style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
+            style: AppTheme.mono.copyWith(
+              fontSize: 10,
+              color: AppColors.inkSoft,
+            ),
           ),
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         Expanded(
           child: CustomPaint(
-            painter: _SparkPainter(trend.values, AppColors.accent),
+            painter: _SparkPainter(
+              trend.values,
+              AppColors.accent,
+              grid: AppColors.gridLine,
+              base: AppColors.hairline,
+            ),
             child: curve
                 ? null
                 : Center(
                     child: Text(
                       noPowerField ? '这一路数据里没有功率，走势留空' : '跑起来几帧就出曲线',
-                      style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: AppColors.inkSoft.withValues(alpha: .8),
+                      ),
                     ),
                   ),
           ),
@@ -627,28 +787,48 @@ class _SparkArea extends StatelessWidget {
   }
 }
 
+/// 虚线：图表里到处要用（网格、游标、均值参考线）
+void _dash(Canvas canvas, Offset a, Offset b, Paint p, {double on = 3, double off = 4}) {
+  final total = (b - a).distance;
+  if (total <= 0) return;
+  final dir = (b - a) / total;
+  var d = 0.0;
+  while (d < total) {
+    final end = math.min(d + on, total);
+    canvas.drawLine(a + dir * d, a + dir * end, p);
+    d = end + off;
+  }
+}
+
+/// 折线 + 面积渐变 + 竖向网格 + 末端游标。
+///
+/// 之前只有一条裸线和一根中线，读不出「现在在哪、涨到哪了」。现在补三样：
+/// 竖向网格（时间刻度感）、线下渐变（有体量）、末端光点 + 竖虚线（定位当前值）。
 class _SparkPainter extends CustomPainter {
   final List<double> pts;
   final Color color;
-  _SparkPainter(this.pts, this.color);
+  final Color grid;
+  final Color base;
+  _SparkPainter(this.pts, this.color, {required this.grid, required this.base});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final base = Paint()
-      ..color = AppColors.line
-      ..strokeWidth = 1;
+    final h = size.height;
+    final w = size.width;
+
+    // 横网格：底部实线 + 上两层虚线，给折线一个「参考平面」
+    final gridPaint = Paint()
+      ..color = grid
+      ..strokeWidth = .8;
+    for (final f in const [.34, .67]) {
+      _dash(canvas, Offset(0, h * f), Offset(w, h * f), gridPaint);
+    }
     canvas.drawLine(
-      Offset(0, size.height - .5),
-      Offset(size.width, size.height - .5),
-      base,
-    );
-    final dashed = Paint()
-      ..color = AppColors.line.withValues(alpha: .55)
-      ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(0, size.height / 2),
-      Offset(size.width, size.height / 2),
-      dashed,
+      Offset(0, h - .5),
+      Offset(w, h - .5),
+      Paint()
+        ..color = base
+        ..strokeWidth = 1,
     );
 
     if (pts.length < 2) return;
@@ -661,42 +841,76 @@ class _SparkPainter extends CustomPainter {
     lo -= pad;
     hi += pad;
 
+    double top = 4;
+    double bottom = h - 4;
     double yOf(double v) {
-      if (flat) return size.height / 2;
-      return size.height - 3 - (v - lo) / (hi - lo) * (size.height - 8);
+      if (flat) return (top + bottom) / 2;
+      return bottom - (v - lo) / (hi - lo) * (bottom - top);
     }
 
-    final dx = size.width / (pts.length - 1);
-    final path = Path();
+    // 右边留 5px：末端光点半径 6，不留边会被画布裁掉一半
+    final plotW = math.max(1.0, w - 5);
+    final dx = plotW / (pts.length - 1);
+    final line = Path();
     for (var i = 0; i < pts.length; i++) {
       final x = dx * i;
       final y = yOf(pts[i]);
       if (i == 0) {
-        path.moveTo(x, y);
+        line.moveTo(x, y);
       } else {
-        path.lineTo(x, y);
+        line.lineTo(x, y);
       }
     }
+
+    // 线下渐变：同一条路径闭到底边，只填不描
+    final area = Path.from(line)
+      ..lineTo(plotW, h)
+      ..lineTo(0, h)
+      ..close();
     canvas.drawPath(
-      path,
+      area,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color.withValues(alpha: .22), color.withValues(alpha: .01)],
+        ).createShader(Rect.fromLTWH(0, 0, w, h))
+        ..style = PaintingStyle.fill,
+    );
+
+    canvas.drawPath(
+      line,
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6
+        ..strokeWidth = 1.8
         ..strokeJoin = StrokeJoin.round
         ..strokeCap = StrokeCap.round,
     );
-    final lastX = dx * (pts.length - 1);
-    canvas.drawCircle(
-      Offset(lastX, yOf(pts.last)),
-      2.5,
-      Paint()..color = color,
+
+    // 末端游标：竖虚线到基线 + 双层光点，一眼看出「现在就是这个值」
+    final lastX = dx * (pts.length - 1);    final lastY = yOf(pts.last);
+    _dash(
+      canvas,
+      Offset(lastX, lastY),
+      Offset(lastX, h - .5),
+      Paint()
+        ..color = color.withValues(alpha: .30)
+        ..strokeWidth = 1,
     );
+    canvas.drawCircle(
+      Offset(lastX, lastY),
+      6,
+      Paint()..color = color.withValues(alpha: .18),
+    );
+    canvas.drawCircle(Offset(lastX, lastY), 2.8, Paint()..color = color);
   }
 
   @override
   bool shouldRepaint(_SparkPainter old) =>
-      old.pts.length != pts.length || old.color != color;
+      old.pts.length != pts.length ||
+      old.color != color ||
+      (pts.isNotEmpty && (old.pts.isEmpty || old.pts.last != pts.last));
 }
 
 // MARK: - 保护板卡
@@ -724,10 +938,12 @@ class _BmsCard extends StatelessWidget {
     }
 
     final primary = data.primary;
-    final powerIdx = primary.indexWhere((m) => m.label.contains('功率'));
+    // 保护板的主指标是电量，不是功率 —— 骑到哪都先看这个
+    var headIdx = primary.indexWhere((m) => m.label.contains('电量'));
+    if (headIdx < 0) headIdx = primary.indexWhere((m) => m.label.contains('功率'));
     final tiles = <_Tile>[
       for (var i = 0; i < primary.length && i < 4; i++)
-        _Tile.of(primary[i], highlight: i == powerIdx),
+        _Tile.of(primary[i], primary: i == headIdx),
     ];
 
     final remain = findMetric(data.secondary, const ['剩余容量']);
@@ -747,41 +963,36 @@ class _BmsCard extends StatelessWidget {
       onTap: () => _showAllMetrics(context, link, '保护板全部数据'),
       child: _CardFrame(
         dot: AppColors.good,
-        title: '${brandOf(link.driver?.name, '保护板')} · 保护板',
-        trailing: Text(
+        title: '保护板',
+        brand: brandOf(link.driver?.name, '未识别'),
+        trailing: _MiniTag(
           flagText ?? balanceText,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 11,
-            color: flagText != null
-                ? (data.protection.isNotEmpty ? AppColors.bad : AppColors.warn)
-                : AppColors.inkSoft,
-          ),
+          flagText != null
+              ? (data.protection.isNotEmpty ? AppColors.bad : AppColors.warn)
+              : AppColors.inkSoft,
         ),
+        band: _MetricBand(tiles: tiles),
         body: (h) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _MetricGrid(tiles: tiles),
             if (data.cells.isNotEmpty) ...[
               _SectionGap(
                 '单体电压 · ${data.cells.length} 串',
                 trailing: Text(
                   '压差 ${(data.deltaV * 1000).toStringAsFixed(0)} mV',
-                  style: TextStyle(
-                    fontSize: 11,
+                  style: AppTheme.mono.copyWith(
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: data.deltaV > 0.05 ? AppColors.warn : AppColors.good,
                   ),
                 ),
               ),
-              // 和走势图同高（118）：两块小图比例接近，看着不会一块大一块小
-              Flexible(
-                child: SizedBox(height: 118, child: _CellBars(data: data)),
-              ),
+              const SizedBox(height: 8),
+              Expanded(child: _CellBars(data: data)),
+              const SizedBox(height: 7),
               _CellLegend(data: data),
             ],
+            const SizedBox(height: 12),
             _SectionGap(
               '剩余容量',
               trailing: Text(
@@ -789,11 +1000,12 @@ class _BmsCard extends StatelessWidget {
                     ? '${data.soc}%'
                     : '${remain.value} ${remain.unit} · ${data.soc}%',
                 style: AppTheme.mono.copyWith(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: AppColors.inkSoft,
                 ),
               ),
             ),
+            const SizedBox(height: 7),
             _SocBar(soc: data.soc),
           ],
         ),
@@ -806,7 +1018,7 @@ class _BmsCard extends StatelessWidget {
             tempSpread == null ? '--' : tempSpread.toStringAsFixed(0),
             '℃',
           ),
-        ]),
+        ], valueSize: 14, labelSize: 10),
       ),
     );
   }
@@ -814,6 +1026,9 @@ class _BmsCard extends StatelessWidget {
 
 /// 一节一根柱：最高标红、最低标蓝。
 /// 纯数字看不出「压差是集中还是散」，换成柱形一眼就分得出来。
+///
+/// 柱高做了压平（30%~100%），否则十六节只差十几毫伏时全一样高、看不出差别；
+/// 代价是柱高不再是绝对值，所以必须补一条「平均值参考线」把零点感找回来。
 class _CellBars extends StatelessWidget {
   final BmsData data;
   const _CellBars({required this.data});
@@ -823,39 +1038,94 @@ class _CellBars extends StatelessWidget {
     final cells = data.cells;
     final lo = cells.reduce(math.min);
     final hi = cells.reduce(math.max);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    final avg = cells.reduce((a, b) => a + b) / cells.length;
+
+    double factorOf(double v) => hi - lo < 1e-9
+        ? .55
+        : .30 + .70 * ((v - lo) / (hi - lo));
+
+    return Stack(
+      alignment: Alignment.bottomCenter,
       children: [
-        for (var i = 0; i < cells.length; i++)
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: cells.length > 24 ? .6 : 1.5,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _CellRefPainter(
+                avg: factorOf(avg),
+                base: AppColors.hairline,
+                ref: AppColors.inkSoft.withValues(alpha: .5),
               ),
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: FractionallySizedBox(
-                  // 柱高最低留 30%：十六节之间常常只差十几毫伏，满量程画就全一样高了
-                  heightFactor: hi - lo < 1e-9
-                      ? .55
-                      : .30 + .70 * ((cells[i] - lo) / (hi - lo)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: (i + 1) == data.maxIdx
-                          ? AppColors.bad
-                          : (i + 1) == data.minIdx
-                          ? AppColors.cool
-                          : AppColors.barIdle,
-                      borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 0; i < cells.length; i++)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: cells.length > 24 ? .8 : 2,
+                  ),
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: FractionallySizedBox(
+                      heightFactor: factorOf(cells[i]),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: (i + 1) == data.maxIdx
+                              ? AppColors.bad
+                              : (i + 1) == data.minIdx
+                              ? AppColors.cool
+                              : AppColors.barIdle,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(2.5),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
+          ],
+        ),
       ],
     );
   }
+}
+
+/// 柱状图的两条参考线：底部基线（零点）+ 平均值虚线（水平位置）
+class _CellRefPainter extends CustomPainter {
+  final double avg;
+  final Color base;
+  final Color ref;
+  _CellRefPainter({required this.avg, required this.base, required this.ref});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final y = size.height * (1 - avg);
+    _dash(
+      canvas,
+      Offset(0, y),
+      Offset(size.width, y),
+      Paint()
+        ..color = ref
+        ..strokeWidth = 1,
+      on: 4,
+      off: 5,
+    );
+    canvas.drawLine(
+      Offset(0, size.height - .5),
+      Offset(size.width, size.height - .5),
+      Paint()
+        ..color = base
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CellRefPainter old) =>
+      old.avg != avg || old.base != base || old.ref != ref;
 }
 
 class _CellLegend extends StatelessWidget {
@@ -868,37 +1138,124 @@ class _CellLegend extends StatelessWidget {
     final avg = cells.isEmpty
         ? 0.0
         : cells.reduce((a, b) => a + b) / cells.length;
+
+    Widget dot(Color c) => Container(
+      width: 5,
+      height: 5,
+      margin: const EdgeInsets.only(right: 4),
+      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+    );
+
+    // 三栏等比 + 各自 scaleDown：360 窄屏（或系统字体放大）时整栏等比缩小，
+    // 而不是把 "3.300V" 变成省略号 —— 这三组数字是这张卡最该读清的东西。
+    Widget cell(Widget child, Alignment align) => Expanded(
+      child: Align(
+        alignment: align,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: align,
+          child: child,
+        ),
+      ),
+    );
+
     return Row(
       children: [
-        Expanded(
-          child: Text(
-            '#${data.minIdx} 最低 ${data.minV.toStringAsFixed(3)}V',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: AppColors.cool),
+        cell(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              dot(AppColors.cool),
+              Text.rich(
+                TextSpan(
+                  text: '#${data.minIdx} 最低 ',
+                  children: [
+                    TextSpan(
+                      text: '${data.minV.toStringAsFixed(3)}V',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ],
+                ),
+                style: AppTheme.mono.copyWith(
+                  fontSize: 10,
+                  color: AppColors.cool,
+                ),
+              ),
+            ],
           ),
+          Alignment.centerLeft,
         ),
-        Text(
-          '平均 ${avg.toStringAsFixed(3)}V',
-          style: TextStyle(fontSize: 11, color: AppColors.inkSoft),
-        ),
-        Expanded(
-          child: Text(
-            '#${data.maxIdx} 最高 ${data.maxV.toStringAsFixed(3)}V',
-            textAlign: TextAlign.right,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: AppColors.bad),
+        cell(
+          Text.rich(
+            TextSpan(
+              text: '平均 ',
+              children: [
+                TextSpan(
+                  text: '${avg.toStringAsFixed(3)}V',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ],
+            ),
+            style: AppTheme.mono.copyWith(
+              fontSize: 10,
+              color: AppColors.inkSoft,
+            ),
           ),
+          Alignment.center,
+        ),
+        cell(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text.rich(
+                TextSpan(
+                  text: '#${data.maxIdx} 最高 ',
+                  children: [
+                    TextSpan(
+                      text: '${data.maxV.toStringAsFixed(3)}V',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ],
+                ),
+                style: AppTheme.mono.copyWith(
+                  fontSize: 10,
+                  color: AppColors.bad,
+                ),
+              ),
+              Container(
+                width: 5,
+                height: 5,
+                margin: const EdgeInsets.only(left: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.bad,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+          Alignment.centerRight,
         ),
       ],
     );
   }
 }
 
+/// 电量条：底槽 + 填充 + 四道刻度。
+/// 刻度不是装饰 —— 20/40/60/80 这几个位置是判断「还能骑多远」的锚点。
 class _SocBar extends StatelessWidget {
   final int soc;
   const _SocBar({required this.soc});
+
+  static const _h = 8.0;
 
   @override
   Widget build(BuildContext context) {
@@ -906,15 +1263,46 @@ class _SocBar extends StatelessWidget {
     final color = soc < 20
         ? AppColors.bad
         : (soc < 50 ? AppColors.warn : AppColors.good);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(3),
-      child: Container(
-        height: 6,
-        color: AppColors.line,
-        child: FractionallySizedBox(
-          alignment: Alignment.centerLeft,
-          widthFactor: value,
-          child: ColoredBox(color: color),
+    return SizedBox(
+      height: _h,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_h / 2),
+        child: Stack(
+          children: [
+            Positioned.fill(child: ColoredBox(color: AppColors.cardAlt)),
+            Positioned.fill(
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: value,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withValues(alpha: .78),
+                        color,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // 刻度：用卡片底色切出细缝，深浅主题下都看得见
+            for (var i = 1; i < 5; i++)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: i / 5,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(width: 1.2, color: AppColors.card),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

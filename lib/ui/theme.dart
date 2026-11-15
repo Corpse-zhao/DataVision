@@ -63,18 +63,18 @@ class AppPalettes {
     name: '浅色',
     desc: '白底纸感，室内看得最清',
     brightness: Brightness.light,
-    bg: Color(0xFFF2F4F7),
+    bg: Color(0xFFEFF2F6),
     card: Color(0xFFFFFFFF),
-    cardAlt: Color(0xFFF2F4F7),
-    ink: Color(0xFF14181F),
-    inkSoft: Color(0xFF6B7280),
-    line: Color(0xFFE6E9EF),
+    cardAlt: Color(0xFFF3F6FA),
+    ink: Color(0xFF11161D),
+    inkSoft: Color(0xFF6A7280),
+    line: Color(0xFFE4E8EF),
     accent: Color(0xFF2563EB),
     good: Color(0xFF16A34A),
     warn: Color(0xFFD97706),
     bad: Color(0xFFDC2626),
     cool: Color(0xFF0EA5E9),
-    barIdle: Color(0xFFCFDBEC),
+    barIdle: Color(0xFFC6D4E6),
     radius: 14,
   );
 
@@ -84,18 +84,18 @@ class AppPalettes {
     name: '夜色',
     desc: '深蓝黑底，晚上开着不晃眼',
     brightness: Brightness.dark,
-    bg: Color(0xFF0A0E13),
-    card: Color(0xFF131A22),
-    cardAlt: Color(0xFF0F151C),
-    ink: Color(0xFFE9F0F7),
-    inkSoft: Color(0xFF8496A9),
-    line: Color(0xFF212B36),
+    bg: Color(0xFF080C10),
+    card: Color(0xFF141C25),
+    cardAlt: Color(0xFF0E151D),
+    ink: Color(0xFFEAF1F8),
+    inkSoft: Color(0xFF8FA1B4),
+    line: Color(0xFF25313D),
     accent: Color(0xFF3E8BFF),
     good: Color(0xFF35D07F),
     warn: Color(0xFFF5A524),
     bad: Color(0xFFFF5A5F),
     cool: Color(0xFF47C7FF),
-    barIdle: Color(0xFF2A3947),
+    barIdle: Color(0xFF33465A),
     radius: 16,
   );
 
@@ -106,17 +106,17 @@ class AppPalettes {
     desc: '纯黑底荧光青，强光下也跳出来',
     brightness: Brightness.dark,
     bg: Color(0xFF000000),
-    card: Color(0xFF060809),
-    cardAlt: Color(0xFF0B1012),
+    card: Color(0xFF0A0F11),
+    cardAlt: Color(0xFF111A1C),
     ink: Color(0xFFF2F7F6),
-    inkSoft: Color(0xFF7B8A8C),
-    line: Color(0xFF1A2224),
+    inkSoft: Color(0xFF8A9B9D),
+    line: Color(0xFF1F2A2C),
     accent: Color(0xFF00E5A0),
     good: Color(0xFF22E06B),
     warn: Color(0xFFFFC24B),
     bad: Color(0xFFFF4D4D),
     cool: Color(0xFF23D3FF),
-    barIdle: Color(0xFF1E2A2C),
+    barIdle: Color(0xFF2C3D3F),
     radius: 10,
     numberScale: 1.06,
     glow: true,
@@ -130,17 +130,17 @@ class AppPalettes {
     desc: '暖光仪表盘，夜里看着不累',
     brightness: Brightness.dark,
     bg: Color(0xFF0D0906),
-    card: Color(0xFF17100A),
-    cardAlt: Color(0xFF1D1509),
+    card: Color(0xFF1B1309),
+    cardAlt: Color(0xFF241A0C),
     ink: Color(0xFFFFEFD6),
-    inkSoft: Color(0xFFA98A5F),
-    line: Color(0xFF2E2417),
+    inkSoft: Color(0xFFAE8F63),
+    line: Color(0xFF332817),
     accent: Color(0xFFFFA71F),
     good: Color(0xFFFFC24D),
     warn: Color(0xFFFF8A00),
     bad: Color(0xFFFF4D3D),
     cool: Color(0xFFFFD98A),
-    barIdle: Color(0xFF3A2C1A),
+    barIdle: Color(0xFF4A3820),
     radius: 8,
     numberScale: 1.06,
     glow: true,
@@ -219,12 +219,30 @@ class AppColors {
   static double get radius => _p.radius;
   static double get numberScale => _p.numberScale;
   static bool get glow => _p.glow;
+  static bool get grid => _p.grid;
   static bool get isDark => _p.brightness == Brightness.dark;
 
-  /// 数字光晕（只有 HUD / 琥珀这类主题给）
-  static List<Shadow>? get numberGlow => _p.glow
-      ? [Shadow(color: _p.accent.withValues(alpha: .35), blurRadius: 14)]
-      : null;
+  /// 细线：分隔线、图表基线。比 line 再淡一档，避免版面被横线切碎
+  static Color get hairline => _p.line.withValues(alpha: isDark ? .85 : .75);
+
+  /// 图表网格线，只用在图里
+  static Color get gridLine => _p.line.withValues(alpha: isDark ? .55 : .5);
+
+  /// 数字光晕（只有 HUD / 琥珀这类主题给）。
+  ///
+  /// [strong] 只给主数值 —— 一屏八个数字全都发光等于都不发光。
+  static List<Shadow>? glowFor({bool strong = false}) {
+    if (!_p.glow) return null;
+    return [
+      Shadow(
+        color: _p.accent.withValues(alpha: strong ? .45 : .22),
+        blurRadius: strong ? 16 : 8,
+      ),
+    ];
+  }
+
+  /// 兼容老调用点
+  static List<Shadow>? get numberGlow => glowFor();
 
   static Color tone(MetricTone t) {
     switch (t) {
@@ -311,27 +329,35 @@ class AppTheme {
     );
   }
 
+  /// 数字样式：等宽数字 + 跟随主题字体。
+  ///
+  /// 特意不指定 'Consolas'：App 不内嵌字体，这个族名在 iOS/Android 上根本不存在，
+  /// 写了也只是"看起来配了"。反而在桌面/测试环境里它会真的生效，而 Consolas 的零
+  /// 带一道斜杠（60.3 会读成 6Ø.3），在数字为主的界面上是硬伤。
+  /// [FontFeature.tabularFigures] 才是这里真正想要的东西：每个数字等宽，跳数不抖。
   static const mono = TextStyle(
-    fontFamily: 'Consolas',
+    fontFamilyFallback: ['Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC'],
     fontFeatures: [FontFeature.tabularFigures()],
   );
 }
 
-/// 背景网格：只给车载/HUD 主题用，画一层淡淡的格子，让纯黑底不那么"空"。
-/// 放在 Scaffold 之上、内容之下，不拦点击。
+/// 背景网格：只给车载/HUD 主题用，画一层极淡的格子，让纯黑底不那么"空"。
+///
+/// 放在 Scaffold 之上、内容之下，不拦点击。alpha 压得很低（.22）—— 网格是氛围，
+/// 一旦能看清楚就会和数据抢注意力，卡片边缘也会显得毛糙。
 class ThemeBackdrop extends StatelessWidget {
   final Widget child;
   const ThemeBackdrop({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    if (!AppColors.glow) return child;
+    if (!AppColors.grid) return child;
     return Stack(
       children: [
         Positioned.fill(
           child: IgnorePointer(
             child: CustomPaint(
-              painter: _GridPainter(AppColors.line.withValues(alpha: .9)),
+              painter: _GridPainter(AppColors.line.withValues(alpha: .22)),
             ),
           ),
         ),
@@ -349,8 +375,8 @@ class _GridPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final p = Paint()
       ..color = color
-      ..strokeWidth = .6;
-    const step = 28.0;
+      ..strokeWidth = .8;
+    const step = 32.0;
     for (var x = step; x < size.width; x += step) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
     }
@@ -368,12 +394,18 @@ class SectionCard extends StatelessWidget {
   final Widget child;
   final Widget? trailing;
   final EdgeInsets padding;
+
+  /// true = 内容纵向撑满卡片。Column 给子项的是「无界高度」，
+  /// 直接放 Align/Center 是居中不了的，必须走 Expanded 才会真的占满。
+  final bool fill;
+
   const SectionCard({
     super.key,
     this.title,
     required this.child,
     this.trailing,
     this.padding = const EdgeInsets.all(14),
+    this.fill = false,
   });
 
   @override
@@ -381,8 +413,8 @@ class SectionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppColors.radius + 2),
-        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppColors.radius),
+        border: Border.all(color: AppColors.hairline),
       ),
       padding: padding,
       child: Column(
@@ -408,7 +440,7 @@ class SectionCard extends StatelessWidget {
                 ],
               ),
             ),
-          child,
+          if (fill) Expanded(child: child) else child,
         ],
       ),
     );
@@ -427,7 +459,7 @@ class BigTile extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppColors.radius + 2),
+        borderRadius: BorderRadius.circular(AppColors.radius),
         border: Border.all(color: AppColors.line),
       ),
       child: Column(

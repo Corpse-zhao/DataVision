@@ -28,27 +28,13 @@ class _ConsolePageState extends State<ConsolePage> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('控制器')),
-                      ButtonSegment(value: true, label: Text('保护板')),
-                    ],
-                    selected: {_bmsTab},
-                    onSelectionChanged: (s) =>
-                        setState(() => _bmsTab = s.first),
-                    showSelectedIcon: false,
-                    style: ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      textStyle: WidgetStateProperty.all(
-                        const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            // 不用 Material 的 SegmentedButton：它自带 M3 的 secondaryContainer
+            // 浅紫底，和主题色打架，而且 ButtonStyle.textStyle 一旦给了新的
+            // TextStyle 就把主题字体一起丢掉（中文会渲染成方框）。
+            _SegTabs(
+              index: _bmsTab ? 1 : 0,
+              labels: const ['控制器', '保护板'],
+              onTap: (i) => setState(() => _bmsTab = i == 1),
             ),
             const SizedBox(height: 12),
             SectionCard(
@@ -144,8 +130,7 @@ class _ConsolePageState extends State<ConsolePage> {
     );
   }
 
-  Widget _kv(String k, String v, {bool bad = false}) {
-    return Padding(
+  Widget _kv(String k, String v, {bool bad = false}) {    return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,6 +152,66 @@ class _ConsolePageState extends State<ConsolePage> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 两档切换：灰槽 + 白色滑块，颜色全走主题
+class _SegTabs extends StatelessWidget {
+  final int index;
+  final List<String> labels;
+  final ValueChanged<int> onTap;
+  const _SegTabs({
+    required this.index,
+    required this.labels,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.cardAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.hairline, width: .5),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onTap(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  decoration: BoxDecoration(
+                    color: i == index ? AppColors.card : Colors.transparent,
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(
+                      color: i == index
+                          ? AppColors.hairline
+                          : Colors.transparent,
+                      width: .5,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    labels[i],
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: i == index
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: i == index ? AppColors.ink : AppColors.inkSoft,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -82,7 +82,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 await widget.ctrl.disconnect(forget: true);
                 setState(() {});
               }),
-              const SizedBox(height: 6),
+              // 两行同构的设备条目之间要有一根细线，否则会糊成一坨
+              Divider(height: 13, color: AppColors.hairline),
               _deviceRow('保护板', p.deviceName('bms'), () async {
                 await widget.bms.disconnect(forget: true);
                 setState(() {});

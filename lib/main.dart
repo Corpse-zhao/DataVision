@@ -144,15 +144,15 @@ class _DataVisionAppState extends State<DataVisionApp>
                     Text(
                       '数据视界',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: .5,
+                        letterSpacing: -.2,
                         color: AppColors.ink,
                       ),
                     ),
                     const SizedBox(width: 10),
                     _dot(ctrl.phase == LinkPhase.online, '控'),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 5),
                     _dot(bms.phase == LinkPhase.online, '板'),
                   ],
                 ),

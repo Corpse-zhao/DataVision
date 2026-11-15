@@ -74,9 +74,9 @@ void main() {
     expect(find.text('电量'), findsOneWidget);
     expect(find.textContaining('最高'), findsOneWidget);
     expect(find.textContaining('最低'), findsOneWidget);
-    // 两张卡都在同一页
-    expect(find.textContaining('· 控制器'), findsOneWidget);
-    expect(find.textContaining('· 保护板'), findsOneWidget);
+    // 两张卡都在同一页（标题带里类名和品牌是分开的两段，不再是「凌博 · 控制器」）
+    expect(find.text('控制器'), findsOneWidget);
+    expect(find.text('保护板'), findsOneWidget);
   });
 
   testWidgets('数据页横屏：左右分栏也不溢出（844x390）', (tester) async {
