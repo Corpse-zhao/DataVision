@@ -259,8 +259,9 @@ class BleLink extends ChangeNotifier {
     final name = prefs.deviceName(role);
     if (id != null && r.device.remoteId.str == id) return true;
     // iOS 重装后 UUID 会变，名字没变也认
-    if (id == null && name != null && name.isNotEmpty && _nameOf(r) == name)
+    if (id == null && name != null && name.isNotEmpty && _nameOf(r) == name) {
       return true;
+    }
     return false;
   }
 
@@ -410,9 +411,10 @@ class BleLink extends ChangeNotifier {
       }
     }
     for (final c in writable) {
-      if ((c.properties.notify || c.properties.indicate) &&
-          !ordered.contains(c))
+      final readable = c.properties.notify || c.properties.indicate;
+      if (readable && !ordered.contains(c)) {
         ordered.add(c);
+      }
     }
     for (final c in writable) {
       if (!ordered.contains(c)) ordered.add(c);
@@ -462,11 +464,13 @@ class BleLink extends ChangeNotifier {
     }
   }
 
-  /// 单次写入：带超时，失败先试另一种写方式，再不行就算这条信道不对。
+  /// 单次写入：带超时，失败先换另一种写方式，两种都不行返回 false。
   ///
   /// 必须带超时 —— 有些特征标着「无需响应」实际要 ack，`await write()` 会一直挂着，
   /// 把后面的 `_startPolling()` 一起拖死，表现就是「连上了但一条数据都没有」。
-  Future<void> _safeWrite(
+  /// 两种写方式都试，是因为不少模块的属性位标错：标着 withoutResponse，
+  /// 实际只认带响应的写（要 ACK 才肯往下走）。
+  Future<bool> _safeWrite(
     BluetoothCharacteristic c,
     List<int> bytes, {
     int timeoutMs = 400,
@@ -477,11 +481,12 @@ class BleLink extends ChangeNotifier {
         await c
             .write(bytes, withoutResponse: noResp)
             .timeout(Duration(milliseconds: timeoutMs));
-        return;
+        return true;
       } catch (_) {
         // 换另一种方式再试一次
       }
     }
+    return false;
   }
 
   /// 连上后逐条信道试着发一帧，谁先回数据就锁谁。
@@ -617,14 +622,9 @@ class BleLink extends ChangeNotifier {
   Future<void> _write(List<int> bytes) async {
     final c = _writeChar;
     if (c == null) return;
-    try {
-      await c
-          .write(bytes, withoutResponse: c.properties.writeWithoutResponse)
-          .timeout(const Duration(milliseconds: 400));
-    } catch (e) {
-      // 写入失败通常是信道不对，直接换下一条
-      if (_writeChars.length > 1) _nextChannel();
-    }
+    // 两种写方式都试过还不行，基本就是这条信道不对，换下一条
+    final ok = await _safeWrite(c, bytes);
+    if (!ok && _writeChars.length > 1) _nextChannel();
   }
 
   // MARK: - 收数据
