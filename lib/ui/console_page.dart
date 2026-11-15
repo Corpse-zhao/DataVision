@@ -59,6 +59,7 @@ class _ConsolePageState extends State<ConsolePage> {
                   _kv('设备', link.deviceName.isEmpty ? '--' : link.deviceName),
                   _kv('驱动', link.driver?.name ?? '未识别（嗅探中）'),
                   _kv('信道', link.gattInfo.isEmpty ? '--' : link.gattInfo),
+                  _kv('通知口', link.notifyInfo.isEmpty ? '--' : link.notifyInfo),
                   _kv('收到', '${link.rxCount} 条 / ${link.rxBytes} 字节'),
                   _kv('最近帧', link.lastHex.isEmpty ? '--' : link.lastHex),
                   if (link.error != null) _kv('错误', link.error!, bad: true),

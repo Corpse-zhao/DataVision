@@ -14,6 +14,36 @@ import 'scanner.dart';
 
 enum LinkPhase { idle, scanning, connecting, ready, online, error }
 
+/// 链路自愈的几条判定阈值。
+///
+/// 抽成纯函数是为了能单测 —— 这些阈值写错的表现很隐蔽（连上了、界面绿点、
+/// 但一条数据都没有），只能靠测试兜住。
+class LinkPolicy {
+  /// 连上后多久还是 0 字节就断开重连（重走服务发现 + 订阅）
+  static const zeroByteSeconds = 20;
+
+  /// 还没坐实的信道，多久没数据就换下一条
+  static const channelWindowMs = 1500;
+
+  /// 探测命中的那条多给点时间（坐实要两帧）
+  static const channelWindowHitMs = 3000;
+
+  /// 同一条信道上连出这么多帧才算坐实，才敢写进本地记忆
+  static const confirmedFrames = 2;
+
+  static bool switchChannel({
+    required bool confirmed,
+    required int channels,
+    required Duration sinceChannel,
+    required int windowMs,
+  }) => !confirmed && channels > 1 && sinceChannel.inMilliseconds > windowMs;
+
+  static bool reconnectZeroByte({
+    required int rxCount,
+    required Duration sinceLink,
+  }) => rxCount == 0 && sinceLink.inSeconds >= zeroByteSeconds;
+}
+
 class LinkLog {
   final DateTime at;
   final String tag; // '→' 发送 / '←' 收到 / '!' 状态
@@ -53,6 +83,9 @@ class BleLink extends ChangeNotifier {
   int rxCount = 0;
   String lastHex = '';
   String gattInfo = '';
+
+  /// 订阅到的通知口（数据台里显示，排查「一个字节都收不到」用）
+  String notifyInfo = '';
   int frameCount = 0;
 
   final List<LinkLog> logs = [];
@@ -74,13 +107,27 @@ class BleLink extends ChangeNotifier {
   DateTime? _lastFrameAt;
   DateTime? _lastProbeDriverAt;
   int _staleHits = 0;
-  int _channelRounds = 0;
   int _reconnectAttempt = 0;
   bool _gotFrame = false;
   bool _disposed = false;
-  DateTime? _lastProbeAt;
-  int _lastProbeIdx = 0;
   DateTime? _lastRawNotifyAt;
+
+  /// 每解析出一帧就 +1（探测信道时用来判断「这个等待窗口里有没有回帧」）
+  int _frameSeq = 0;
+
+  /// 当前信道上连续收到几帧。>=2 才算这条信道坐实，才敢写进本地记忆
+  int _framesOnChannel = 0;
+
+  /// 当前信道给多久没数据就换下一条
+  int _channelWindowMs = LinkPolicy.channelWindowMs;
+
+  /// 本次连接开始的时间（判断「连上了但一个字节都没有」）
+  DateTime _linkStartedAt = DateTime.now();
+
+  /// 连续几次连上后 0 字节（>=2 次就把信道记忆清掉，别再信上次记的那条）
+  int _zeroByteLinks = 0;
+
+  bool get _channelConfirmed => _framesOnChannel >= LinkPolicy.confirmedFrames;
 
   bool get connected => _device?.isConnected ?? false;
   bool get isScanning => _scanning;
@@ -121,7 +168,9 @@ class BleLink extends ChangeNotifier {
     _adapterSub = FlutterBluePlus.adapterState.listen((state) {
       if (state == BluetoothAdapterState.off) {
         _setPhase(LinkPhase.error, '蓝牙未打开');
-      } else if (state == BluetoothAdapterState.on && phase == LinkPhase.error && error == '蓝牙未打开') {
+      } else if (state == BluetoothAdapterState.on &&
+          phase == LinkPhase.error &&
+          error == '蓝牙未打开') {
         _setPhase(LinkPhase.idle, '蓝牙已就绪');
         if (prefs.autoConnect && hasSaved) startScan(auto: true);
       }
@@ -133,10 +182,13 @@ class BleLink extends ChangeNotifier {
   Future<void> startScan({bool auto = false}) async {
     if (connected || _disposed) return;
     if (_scanSub == null) {
-      _scanSub = ScanBus.instance.stream.listen(_onScan, onError: (e) {
-        error = '$e';
-        notifyListeners();
-      });
+      _scanSub = ScanBus.instance.stream.listen(
+        _onScan,
+        onError: (e) {
+          error = '$e';
+          notifyListeners();
+        },
+      );
     }
     _joinedBus = true;
     _setPhase(LinkPhase.scanning, '搜索中');
@@ -207,7 +259,8 @@ class BleLink extends ChangeNotifier {
     final name = prefs.deviceName(role);
     if (id != null && r.device.remoteId.str == id) return true;
     // iOS 重装后 UUID 会变，名字没变也认
-    if (id == null && name != null && name.isNotEmpty && _nameOf(r) == name) return true;
+    if (id == null && name != null && name.isNotEmpty && _nameOf(r) == name)
+      return true;
     return false;
   }
 
@@ -219,7 +272,9 @@ class BleLink extends ChangeNotifier {
     if (phase == LinkPhase.connecting) return;
     await stopScan();
     _device = device;
-    deviceName = device.platformName.isNotEmpty ? device.platformName : device.advName;
+    deviceName = device.platformName.isNotEmpty
+        ? device.platformName
+        : device.advName;
     await _teardownGatt();
     _setPhase(LinkPhase.connecting, '连接中');
     _log('!', '连接 $deviceName');
@@ -243,7 +298,9 @@ class BleLink extends ChangeNotifier {
     // iOS 没有这个接口，失败也不影响连接本身。
     if (!kIsWeb && Platform.isAndroid) {
       try {
-        await device.requestConnectionPriority(connectionPriorityRequest: ConnectionPriority.high);
+        await device.requestConnectionPriority(
+          connectionPriorityRequest: ConnectionPriority.high,
+        );
       } catch (_) {}
     }
 
@@ -255,11 +312,13 @@ class BleLink extends ChangeNotifier {
       _log('!', '已记住 $nm，下次搜到自动连接');
     }
 
-    _subs.add(device.connectionState.listen((s) {
-      if (s == BluetoothConnectionState.disconnected && !_disposed) {
-        _onDisconnected();
-      }
-    }));
+    _subs.add(
+      device.connectionState.listen((s) {
+        if (s == BluetoothConnectionState.disconnected && !_disposed) {
+          _onDisconnected();
+        }
+      }),
+    );
 
     await _setupGatt(device);
   }
@@ -291,6 +350,8 @@ class BleLink extends ChangeNotifier {
     final byName = pickByName(pool, deviceName);
     final bySvc = pickByServices(pool, [...gattShort, ...gattShort]);
     driver = byName ?? bySvc;
+    // 驱动是复用的实例（重连时不重建），把上一轮残留的半截帧清掉
+    driver?.reset();
     _applyPrefs(driver);
     if (driver != null) {
       _log('!', '驱动：${driver!.name}');
@@ -303,21 +364,36 @@ class BleLink extends ChangeNotifier {
       return;
     }
 
-    // 只订驱动点名的通知口；一个都没命中（换了固件 / 不认识）才退回订前 3 个。
-    // 原来无差别订阅所有 notify：蚂蚁板有 5~6 个可通知口，多订的只会抢带宽、
-    // 拖慢 152 字节长帧的拼装，表现出来就是「数据一顿一顿、偶尔假掉线」。
+    // 订阅所有可通知口（点名的排前面）。
+    //
+    // v1.0.10 曾为了「省带宽」只订驱动点名的那一个，代价是同一型号不同固件
+    // 把数据放在别的通知口上的板子直接一条字节都收不到（现场：ANT-BLE24EAUB
+    // 有 8 个可写口，数据不在 FFE1 上）。多订一个口本身不花带宽 —— 只有板子
+    // 真往那儿发才有开销，而那种情况本来就是我们要的数据。
     final notifyHints = driver?.notifyHints ?? const <String>[];
-    final hinted = notify.where((c) => notifyHints.contains(shortUuid(c.uuid.str))).toList();
-    final targets = hinted.isNotEmpty ? hinted : notify.take(3).toList();
+    final hinted = notify
+        .where((c) => notifyHints.contains(shortUuid(c.uuid.str)))
+        .toList();
+    final targets = <BluetoothCharacteristic>[
+      ...hinted,
+      ...notify.where((c) => !hinted.contains(c)),
+    ];
+    final subscribed = <String>[];
     for (final c in targets) {
       try {
         await c.setNotifyValue(true);
         _subs.add(c.onValueReceived.listen((data) => feedInput(data, c)));
-        _log('!', '订阅 ${shortUuid(c.uuid.str)}');
+        subscribed.add(shortUuid(c.uuid.str));
       } catch (e) {
         _log('!', '订阅 ${shortUuid(c.uuid.str)} 失败：$e');
       }
     }
+    if (subscribed.isEmpty) {
+      _setPhase(LinkPhase.error, '一个通知口都订不上');
+      return;
+    }
+    notifyInfo = '${subscribed.length} 个（${subscribed.join('、')}）';
+    _log('!', '订阅通知口 $notifyInfo');
 
     // 写入信道排序：驱动提示优先级 → 读写合一 → 其余可写
     _writeChars.clear();
@@ -334,7 +410,9 @@ class BleLink extends ChangeNotifier {
       }
     }
     for (final c in writable) {
-      if ((c.properties.notify || c.properties.indicate) && !ordered.contains(c)) ordered.add(c);
+      if ((c.properties.notify || c.properties.indicate) &&
+          !ordered.contains(c))
+        ordered.add(c);
     }
     for (final c in writable) {
       if (!ordered.contains(c)) ordered.add(c);
@@ -343,7 +421,9 @@ class BleLink extends ChangeNotifier {
     // 上次跑通的那条排最前
     final savedChannel = prefs.channel(role);
     if (savedChannel != null) {
-      final idx = ordered.indexWhere((c) => shortUuid(c.uuid.str) == savedChannel);
+      final idx = ordered.indexWhere(
+        (c) => shortUuid(c.uuid.str) == savedChannel,
+      );
       if (idx > 0) ordered.insert(0, ordered.removeAt(idx));
     }
 
@@ -352,10 +432,14 @@ class BleLink extends ChangeNotifier {
     channelIndex = 0;
     _writeChar = _writeChars.isEmpty ? null : _writeChars.first;
     _channelStartedAt = DateTime.now();
+    _linkStartedAt = DateTime.now();
     _tick = 0;
     _probeDriverIdx = 0;
     _gotFrame = false;
+    _framesOnChannel = 0;
+    _channelWindowMs = LinkPolicy.channelWindowMs;
     _staleHits = 0;
+    _lastFrameAt = null;
 
     if (driver?.passive ?? false) {
       channelCount = 0;
@@ -365,58 +449,87 @@ class BleLink extends ChangeNotifier {
     _setPhase(LinkPhase.ready, '已连接，等数据');
     _log('!', '写入信道 ${channelCount} 条，先用第 1 条');
 
-    // 有些板子要握手命令才肯吐数据
+    // 有些板子要握手命令才肯吐数据；试探完一定要把轮询开起来，
+    // 否则一次卡住的写入就会让整条链路「连着但永远没数据」。
     final d = driver ?? pool.first;
-    for (final f in d.initialFrames) {
-      await _write(f);
+    try {
+      for (final f in d.initialFrames) {
+        await _write(f);
+      }
+      await _probeChannels();
+    } finally {
+      _startPolling();
     }
-
-    await _probeChannels();
-    _startPolling();
   }
 
-  /// 连上后先向最多 3 条可写信道各发一帧（间隔 120ms）。
+  /// 单次写入：带超时，失败先试另一种写方式，再不行就算这条信道不对。
   ///
-  /// 蚂蚁板「三条信道只有一条能写」：原先是 1.6 秒才换一条，正确的那条排第 3 位
-  /// 就得等将近 5 秒才出第一帧。一起试探后，正确那条一般几百毫秒就回数据，
-  /// 收到首帧时再把信道锁到「最后发出去的那条」。
+  /// 必须带超时 —— 有些特征标着「无需响应」实际要 ack，`await write()` 会一直挂着，
+  /// 把后面的 `_startPolling()` 一起拖死，表现就是「连上了但一条数据都没有」。
+  Future<void> _safeWrite(
+    BluetoothCharacteristic c,
+    List<int> bytes, {
+    int timeoutMs = 400,
+  }) async {
+    final first = c.properties.writeWithoutResponse;
+    for (final noResp in [first, !first]) {
+      try {
+        await c
+            .write(bytes, withoutResponse: noResp)
+            .timeout(Duration(milliseconds: timeoutMs));
+        return;
+      } catch (_) {
+        // 换另一种方式再试一次
+      }
+    }
+  }
+
+  /// 连上后逐条信道试着发一帧，谁先回数据就锁谁。
+  ///
+  /// 一次只写一条、写完等 700ms —— 这样「回帧」和「哪条信道」是对得上的。
+  /// v1.0.10 是三条一起发（间隔 120ms），回帧时根本分不清是哪条通的，
+  /// 锁错信道之后就一条数据都没有，还得靠重连才缓过来。
   Future<void> _probeChannels() async {
     final d = driver;
-    if (d == null || d.passive || _writeChars.length <= 1) return;
-    final frames = d.initialFrames.isNotEmpty ? d.initialFrames : d.pollFrames(1);
+    if (d == null || d.passive || _writeChars.isEmpty) return;
+    final frames = d.initialFrames.isNotEmpty
+        ? d.initialFrames
+        : d.pollFrames(1);
     if (frames.isEmpty) return;
 
-    final n = _writeChars.length < 3 ? _writeChars.length : 3;
-    for (var i = 0; i < n; i++) {
+    for (var i = 0; i < _writeChars.length; i++) {
       final c = _writeChars[i];
+      // 上次跑通的那条排在 0，一般第一条就中，不用再挨个试
       for (final f in frames) {
-        try {
-          await c.write(f, withoutResponse: c.properties.writeWithoutResponse);
-        } catch (_) {
-          // 这条写不动就先放过，后面按原逻辑回退
-        }
+        await _safeWrite(c, f);
       }
-      _lastProbeAt = DateTime.now();
-      _lastProbeIdx = i;
-      if (i < n - 1) await Future<void>.delayed(const Duration(milliseconds: 120));
+      _writeChar = c;
+      channelIndex = i;
+      _channelStartedAt = DateTime.now();
+      if (await _waitForFrame(const Duration(milliseconds: 700))) {
+        _framesOnChannel = 1;
+        _channelWindowMs = LinkPolicy.channelWindowHitMs; // 命中的信道多给点时间坐实
+        _updateGattInfo();
+        _log('!', '信道命中 ${i + 1}/$channelCount（${shortUuid(c.uuid.str)}）');
+        return;
+      }
     }
-    // 试探完把当前信道放回原来那条，等首帧回来再由 _commitProbedChannel 定
-    _writeChar = _writeChars[channelIndex.clamp(0, _writeChars.length - 1)];
-    _channelStartedAt = DateTime.now();
-  }
-
-  /// 首帧回来时，如果刚做过信道试探，就锁到最后发出去的那条上
-  void _commitProbedChannel() {
-    final at = _lastProbeAt;
-    if (at == null || _writeChars.length <= 1) return;
-    if (DateTime.now().difference(at).inMilliseconds > 900) return;
-    if (_lastProbeIdx >= _writeChars.length) return;
-    _lastProbeAt = null;
-    channelIndex = _lastProbeIdx;
-    _writeChar = _writeChars[channelIndex];
+    // 一条都没回：从第一条开始轮询，靠 _onTick 的轮转继续找
+    channelIndex = 0;
+    _writeChar = _writeChars.first;
     _channelStartedAt = DateTime.now();
     _updateGattInfo();
-    _log('!', '信道锁定 ${channelIndex + 1}/$channelCount（试探命中）');
+  }
+
+  /// 等一小段时间看有没有新帧进来（探测信道用）
+  Future<bool> _waitForFrame(Duration d) async {
+    final start = _frameSeq;
+    final deadline = DateTime.now().add(d);
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      if (_frameSeq != start) return true;
+    }
+    return false;
   }
 
   void _startPolling() {
@@ -429,8 +542,37 @@ class BleLink extends ChangeNotifier {
     if (!connected || _disposed) return;
     _tick++;
 
-    // 假在线：连着但 6 秒没有一帧 —— 先换信道，两次都不行就重连
-    if (_gotFrame && _lastFrameAt != null) {
+    // ① 连上 20 秒一个字节都没收到：多半是通知口没订上 / 信道全错。
+    //    断开重连会重走 discoverServices + 订阅，比在原地换信道有用得多。
+    if (LinkPolicy.reconnectZeroByte(
+      rxCount: rxCount,
+      sinceLink: DateTime.now().difference(_linkStartedAt),
+    )) {
+      _zeroByteLinks++;
+      if (_zeroByteLinks >= 2) {
+        // 连续两次都 0 字节，说明本地记的那条信道是错的，清掉
+        prefs.saveChannel(role, null);
+        _log('!', '连着两次一个字节都没收到，清掉信道记忆重新找');
+      } else {
+        _log('!', '连上后一直没收到字节，重连一次（重新订阅）');
+      }
+      await _hardReconnect();
+      return;
+    }
+
+    // ② 信道还没坐实（同一条上没连出两帧）：到窗口就换下一条，整轮 8 条也会走完
+    if (LinkPolicy.switchChannel(
+      confirmed: _channelConfirmed,
+      channels: _writeChars.length,
+      sinceChannel: DateTime.now().difference(_channelStartedAt),
+      windowMs: _channelWindowMs,
+    )) {
+      _nextChannel();
+      return;
+    }
+
+    // ③ 曾经稳定过（某条信道上连出过两帧）但现在停了：先换信道，两次不行就重连
+    if (_channelConfirmed && _lastFrameAt != null) {
       final gap = DateTime.now().difference(_lastFrameAt!);
       if (gap.inSeconds >= (driver?.staleTimeoutSeconds ?? 6)) {
         _staleHits++;
@@ -445,18 +587,11 @@ class BleLink extends ChangeNotifier {
       }
     }
 
-    // 还没出数据：一条信道试 1.6 秒，不行换下一条
-    if (!_gotFrame && _writeChars.length > 1) {
-      final windowMs = _channelRounds == 0 ? 1000 : 1600;
-      if (DateTime.now().difference(_channelStartedAt).inMilliseconds > windowMs) {
-        _nextChannel();
-      }
-    }
-
     // 驱动没定下来：每 2.5 秒换一个驱动试探
     if (driver == null) {
       final now = DateTime.now();
-      if (_lastProbeDriverAt == null || now.difference(_lastProbeDriverAt!).inMilliseconds > 2500) {
+      if (_lastProbeDriverAt == null ||
+          now.difference(_lastProbeDriverAt!).inMilliseconds > 2500) {
         _lastProbeDriverAt = now;
         _probeDriverIdx = (_probeDriverIdx + 1) % pool.length;
       }
@@ -472,25 +607,21 @@ class BleLink extends ChangeNotifier {
   void _nextChannel() {
     if (_writeChars.isEmpty) return;
     channelIndex = (channelIndex + 1) % _writeChars.length;
-    if (channelIndex == 0) _channelRounds++;
     _writeChar = _writeChars[channelIndex];
     _channelStartedAt = DateTime.now();
+    _framesOnChannel = 0;
+    _channelWindowMs = LinkPolicy.channelWindowMs;
     _updateGattInfo();
   }
 
   Future<void> _write(List<int> bytes) async {
     final c = _writeChar;
     if (c == null) return;
-    final noResp = c.properties.writeWithoutResponse;
     try {
-      await c.write(bytes, withoutResponse: noResp);
+      await c
+          .write(bytes, withoutResponse: c.properties.writeWithoutResponse)
+          .timeout(const Duration(milliseconds: 400));
     } catch (e) {
-      if (noResp) {
-        try {
-          await c.write(bytes, withoutResponse: false);
-          return;
-        } catch (_) {}
-      }
       // 写入失败通常是信道不对，直接换下一条
       if (_writeChars.length > 1) _nextChannel();
     }
@@ -534,16 +665,18 @@ class BleLink extends ChangeNotifier {
     }
 
     if (parsed) {
-      // 首帧可能就是信道试探打出来的，趁热把信道锁定
-      _commitProbedChannel();
+      _frameSeq++;
+      _framesOnChannel++;
       _gotFrame = true;
       _staleHits = 0;
+      _zeroByteLinks = 0;
       _lastFrameAt = DateTime.now();
       frameCount++;
       _reconnectAttempt = 0;
       error = null;
       if (phase != LinkPhase.online) _setPhase(LinkPhase.online, '在线');
-      _persistLock();
+      // 信道坐实（同一条上连出两帧）才写进本地，免得把碰巧回了一帧的错信道记死
+      if (_channelConfirmed) _persistLock();
       notifyListeners();
     } else if (_rawNotifyAllowed()) {
       // 没解析出整帧的原始字节：数据台看 hex 用，最多 3Hz 刷一次。
@@ -602,6 +735,11 @@ class BleLink extends ChangeNotifier {
     _writeChars.clear();
     _gotFrame = false;
     _lastFrameAt = null;
+    _framesOnChannel = 0;
+    _staleHits = 0;
+    notifyInfo = '';
+    // 驱动里可能留着上一轮没收完的半截帧，不清理会让新连接从错位处开始解析
+    driver?.reset();
     if (prefs.autoConnect && prefs.deviceId(role) != null) {
       _setPhase(LinkPhase.connecting, '掉线了，自动重连');
       _scheduleReconnect();
@@ -615,7 +753,9 @@ class BleLink extends ChangeNotifier {
     _reconnectAttempt++;
     // 首轮等 1.2 秒再连：掉线的瞬间板子往往还在收尾，立刻直连容易被拒，
     // 一被拒又要等下一轮，看起来就是「怎么都连不上」
-    final delay = Duration(milliseconds: (900 * _reconnectAttempt).clamp(900, 6000));
+    final delay = Duration(
+      milliseconds: (900 * _reconnectAttempt).clamp(900, 6000),
+    );
     _reconnectTimer = Timer(delay, () async {
       if (_disposed || connected) return;
       final id = prefs.deviceId(role);
